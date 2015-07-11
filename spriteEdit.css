@@ -1,0 +1,327 @@
+#spritedoc {
+	position: relative;
+}
+
+#spritedoc canvas {
+	display: none;
+}
+
+html.spriteedit-enabled {
+	overflow-y: scroll;
+}
+
+html.spriteedit-smoothscroll {
+	scroll-behavior: smooth;
+}
+
+html.spriteedit-sorting * {
+	cursor: move !important;
+	cursor: -webkit-grabbing !important;
+	cursor: -moz-grabbing !important;
+	cursor: grabbing !important;
+}
+
+.spriteedit-elastic {
+	transition-timing-function: cubic-bezier(0.46, 0, 0.19, 1.44) !important;
+}
+
+.spriteedit-toolbar-container {
+	position: sticky;
+	top: 0;
+	z-index: 91;
+}
+.spriteedit-toolbar {
+	background-color: #80b640;
+	border-bottom: 4px solid #3c6a02;
+	padding: 0.5em 0;
+	transition: height 200ms;
+	z-index: 91;
+}
+.spriteedit-toolbar-fixed {
+	position: fixed;
+	top: 0;
+	right: 0;
+	margin: 0 !important;
+}
+.spriteedit-toolbar > span {
+	margin: 0;
+	opacity: 1;
+	transition: opacity 200ms;
+}
+.spriteedit-toolbar > .mw-ui-button-group {
+	margin-right: 1em;
+}
+.spriteedit-toolbar button {
+	float: none;
+}
+.spriteedit-dropzone {
+	display: none;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	padding: 1em;
+	box-sizing: border-box;
+	opacity: 1;
+	transition: opacity 200ms;
+}
+.spriteedit-dropzone > div {
+	border: 1px dashed gray;
+	text-align: center;
+	transition: line-height 200ms;
+}
+
+.spritedoc-box:hover {
+	z-index: 1;
+}
+
+.spriteedit-handle {
+	flex: none;
+	background: #AAA;
+	background: linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 0 0, linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 2px 2px;
+	background-repeat: repeat-y;
+	background-size: 2px 4px;
+	padding-right: 4px;
+	margin-right: 0.3em;
+	cursor: move;
+	cursor: -webkit-grab;
+	cursor: -moz-grab;
+	cursor: grab;
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+}
+.spritedoc-box > .spriteedit-handle {
+	position: absolute;
+	top: 0;
+	left: 0;
+	bottom: 0;
+}
+
+html.spriteedit-imageeditingenabled .spritedoc-image {
+	cursor: pointer;
+}
+
+.spriteedit-add-name {
+	bottom: -9px;
+	left: 0;
+	width: 100%;
+	position: absolute;
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+	z-index: 9;
+}
+.spriteedit-add-name > button {
+	font-size: 60%;
+	line-height: 1;
+	padding: 1px 0 2px;
+	width: 100%;
+}
+html.spriteedit-sorting .spriteedit-handle,
+html.spriteedit-sorting .spriteedit-add-name {
+	visibility: hidden !important;
+	opacity: 0 !important;
+	transition: visibility, opacity !important;
+}
+#spritedoc h3:hover > .spriteedit-handle,
+.spritedoc-box:hover .spriteedit-handle,
+.spritedoc-box:hover > .spriteedit-add-name {
+	visibility: visible;
+	opacity: 1;
+	transition-delay: 200ms;
+}
+.spritedoc-box:hover .spritedoc-name > .spriteedit-handle {
+	opacity: 0.5;
+}
+.spritedoc-box .spritedoc-name:hover > .spriteedit-handle {
+	opacity: 1;
+	transition-delay: 0s;
+}
+
+#spritedoc [contentEditable]:empty:after {
+	content: "\A0"; /* Non-breaking space */
+}
+#spritedoc [contentEditable][data-placeholder]:empty:after {
+	content: attr(data-placeholder);
+	opacity: 0.54;
+	font-style: italic;
+}
+#spritedoc [contentEditable][data-placeholder]:not(:empty):after {
+	content: none !important;
+}
+
+.spriteedit-dupe {
+	background-color: #FFC7CE !important;
+}
+
+#spritedoc .spriteedit-ghost {
+	position: fixed !important;
+	z-index: 999;
+	opacity: 0.8;
+	pointer-events: none;
+}
+.spriteedit-placeholder {
+	opacity: 0.5;
+	outline: 1px dashed #000;
+}
+
+#spritedoc .spriteedit-processing {
+	background-size: 1em 1em;
+	background-image: linear-gradient(
+		45deg,
+		rgba(204, 204, 204, 0.4) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(204, 204, 204, 0.4) 50%,
+		rgba(204, 204, 204, 0.4) 75%,
+		transparent 75%,
+		transparent
+	);
+	animation: spriteedit-processing 1s infinite linear;
+	/* Limit mw-ui-button transition to background-color */
+	transition: background-color .1s ease-in-out, color .1s ease-in-out, box-shadow .1s ease-in-out;
+}
+@keyframes spriteedit-processing {
+	0% { background-position: 0 0; }
+	100% { background-position: 1em 0; }
+}
+
+.spriteedit-tooltip {
+	position: absolute;
+	margin-left: -19px;
+	padding: 9px;
+	opacity: 0;
+	transform: scale(0);
+	transform-origin: 19px bottom;
+	transition: transform 350ms, opacity 350ms;
+	z-index: 121;
+	white-space: nowrap;
+}
+.spriteedit-tooltip-horizontal {
+	margin-left: 0;
+	margin-top: -19px;
+	transform-origin: right 19px;
+}
+.spriteedit-tooltip-text,
+.spriteedit-tooltip-arrow:before {
+	border: 1px solid #CCC;
+	background-color: #FFF;
+}
+.spriteedit-tooltip-arrow {
+	position: absolute;
+	bottom: 1px;
+	left: 9px;
+	height: 9px;
+	width: 20px;
+	overflow: hidden;
+}
+.spriteedit-tooltip-horizontal .spriteedit-tooltip-arrow {
+	top: 14px;
+	right: -4px;
+	bottom: auto;
+	left: auto;
+	transform: rotate(-90deg);
+}
+.spriteedit-tooltip-arrow:before {
+	content: "";
+	position: absolute;
+	transform: rotate(45deg);
+	height: 10px;
+	width: 10px;
+	left: 4px;
+	top: -6px;
+	padding: 0;
+}
+
+.spriteedit-dialog-overlay {
+	display: flex;
+	align-items: center;
+	position: fixed;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0,0,0,0.2);
+	opacity: 0;
+	transition: opacity 300ms;
+	z-index: 9990
+}
+.spriteedit-dialog {
+	position: relative;
+	background-color: #FFF;
+	max-width: 90%;
+	max-height: 80%;
+	transform: scale(0);
+	transition-property: transform, width, height;
+	transition-duration: 400ms, 350ms, 350ms;
+	/* Non-flex fallback */
+	margin: 1em auto;
+	border-radius: 3px;
+	overflow: hidden;
+}
+#spriteedit-dialog-close {
+	border-radius: 0;
+	border-width: 0;
+	line-height: 1;
+	position: absolute;
+	right: 0;
+	top: 0;
+	min-width: 0;
+	width: 42px;
+	height: 42px;
+	padding: 0;
+	border-width: 0 0 0 1px;
+	border-radius: 0;
+	font-size: 21px;
+}
+.spriteedit-dialog-panel {
+	box-sizing: border-box;
+	height: 100%;
+}
+.spriteedit-dialog-panel > * {
+	padding: 0.5em;
+}
+.spriteedit-dialog-title {
+	text-align: center;
+	font-size: 120%;
+	height: 26px;
+	white-space: nowrap;
+	padding: 8px;
+	margin: 0 42px;
+}
+.spriteedit-dialog-text {
+	border: solid #CCC;
+	border-width: 1px 0;
+	box-sizing: border-box;
+	max-height: 100%;
+	overflow: auto;
+}
+.spriteedit-dialog-text textarea {
+	min-width: 40em;
+	/* TODO: Remove on update to MW1.25 */
+	min-height: 8em;
+	resize: none;
+	overflow: hidden;
+}
+
+.spriteedit-dialog-actions {
+	overflow: hidden;
+}
+
+.spriteedit-sheet-diff {
+	white-space: nowrap;
+}
+.spriteedit-old-sheet,
+.spriteedit-new-sheet {
+	display: inline-block;
+	padding: 1em;
+	text-align: center;
+	vertical-align: top;
+}
+.spriteedit-new-sheet {
+	background-color: #D8ECFF;
+}
+.spriteedit-old-sheet {
+	background-color: #FEEEC8;
+}
