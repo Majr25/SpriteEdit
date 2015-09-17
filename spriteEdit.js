@@ -15,7 +15,8 @@ var imageEditingSupported = ( function() {
 		window.FormData &&
 		window.ProgressEvent &&
 		URL && URL.revokeObjectURL && URL.createObjectURL &&
-		document.createElement( 'canvas' ).getContext
+		document.createElement( 'canvas' ).getContext && 
+		'crossOrigin' in new Image()
 	) {
 		return true;
 	}
@@ -35,12 +36,6 @@ var historySupported = window.history && history.pushState;
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
 var pointerEventsSupported = $.client.profile().name !== 'msie' || $.client.profile().versionBase > 10;
 var idsPageId = $doc.data( 'idspage' );
-var revisionsApi = new mw.Api( { parameters: {
-	action: 'query',
-	prop: 'revisions',
-	rvprop: 'content',
-	utf8: true
-} } );
 
 
 // Handle recreating the editor
@@ -91,6 +86,12 @@ var create = function( state ) {
 	var loadingImages = [];
 	var idsTable, idChanges, sheetData;
 	var panels = {};
+	var revisionsApi = new mw.Api( { parameters: {
+		action: 'query',
+		prop: 'revisions',
+		rvprop: 'content',
+		utf8: true
+	} } );
 	var $headingTemplate = $( '<h3>' ).html(
 		$( '<span>' )
 			.addClass( 'mw-headline spriteedit-new' )
@@ -144,6 +145,7 @@ var create = function( state ) {
 		);
 		spritesheetReady.resolve();
 	};
+	spritesheet.crossOrigin = 'anonymous';
 	spritesheet.src = settings.sheet;
 	
 	revisionsApi.get( {
