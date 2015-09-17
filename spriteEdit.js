@@ -706,24 +706,58 @@ var create = function( state ) {
 				summaryPanel.show();
 			}
 			
-			var sectionNum = 0;
-			var headingOrder = [];
+			var $sections = $doc.find( '.spritedoc-section' );
+			var sectionIds = [];
+			var getSectionId = ( function() {
+				var id = 0;
+				return function() {
+					if ( id < sectionIds.length ) {
+						sectionIds.sort( function( a, b ) {
+							return a - b;
+						} );
+						
+						$.each( sectionIds, function( _, v ) {
+							if ( v - id > 1 ) {
+								return false;
+							}
+							id = v;
+						} );
+					}
+					
+					id++;
+					
+					sectionIds.push( id );
+					return id;
+				};
+			}() );
+			
+			$sections.each( function() {
+				var id = $( this ).data( 'section-id' );
+				if ( id !== undefined ) {
+					sectionIds.push( id );
+				}
+			} );
+			
+			var headingRows = [];
 			var ids = [];
-			$doc.find( '.mw-headline, .spritedoc-box' ).each( function() {
-				var $this = $( this );
-				if ( $this.hasClass( 'mw-headline' ) ) {
-					sectionNum++;
-					headingOrder.push( luaStringQuote( $this.text() ) + ',' );
-					return true;
-				}
+			$sections.each( function() {
+				var $section = $( this );
+				var sectionId = $section.data( 'section-id' ) || getSectionId();
+				var sectionName = $section.find( '.mw-headline' ).text();
+				headingRows.push(
+					'{ ' + luaStringQuote( sectionName ) + ', id = ' + sectionId + ' },'
+				);
 				
-				var pos = $this.data( 'pos' );
-				if ( pos === undefined ) {
-					pos = $this.data( 'new-pos' );
-				}
-				$this.find( '.spritedoc-name' ).each( function() {
-					var id = $( this ).text();
-					ids.push( { sortKey: id.toLowerCase(), id: id, pos: pos, section: sectionNum } );
+				$section.find( '.spritedoc-box' ).each( function() {
+					var $box = $( this );
+					var pos = $box.data( 'pos' );
+					if ( pos === undefined ) {
+						pos = $box.data( 'new-pos' );
+					}
+					$box.find( '.spritedoc-name' ).each( function() {
+						var id = $( this ).text();
+						ids.push( { sortKey: id.toLowerCase(), id: id, pos: pos, section: sectionId } );
+					} );
 				} );
 			} );
 			ids.sort( function( a, b ) {
@@ -741,7 +775,7 @@ var create = function( state ) {
 			idsTable = [
 				'return {',
 				'	sections = {',
-				'		' + headingOrder.join( '\n\t\t' ),
+				'		' + headingRows.join( '\n\t\t' ),
 				'	},',
 				'	ids = {',
 				'		' + idsRows.join( '\n\t\t' ),
