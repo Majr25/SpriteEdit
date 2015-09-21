@@ -23,14 +23,7 @@ var imageEditingSupported = ( function() {
 	
 	return false;
 }() );
-var dropSupported = ( function() {
-	// If image editing isn't supported, we don't care about dropping any more
-	if ( !imageEditingSupported ) {
-		return false;
-	}
-	
-	return 'draggable' in $root[0];
-}() );
+var dropSupported = 'draggable' in $root[0];
 var historySupported = window.history && history.pushState;
 // HTML pointer-events is dumb and can't be tested for
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
@@ -386,6 +379,13 @@ var create = function( state ) {
 				makeButton( 'New section', { id: 'spriteedit-add-section' } ),
 				makeButton( 'New image', { id: 'spriteedit-add-image' } )
 			),
+			$( '<select>' ).prop( 'id', 'spriteedit-toolbox' ).addClass( 'mw-ui-button' ).append(
+				$( '<option>' ).prop( {
+					disabled: true,
+					selected: true,
+					value: ''
+				} ).css( 'display', 'none' ).text( 'Tools' )
+			),
 			$( '<div>' ).addClass( 'spriteedit-dropzone' ).append(
 				$( '<div>' ).text( 'Drop images here' )
 			).height( $win.height() / 4 )
@@ -396,6 +396,15 @@ var create = function( state ) {
 				title: 'Not supported by your browser.'
 			} ).css( 'cursor', 'help' );
 		}
+		
+		// Create tools
+		var $toolbox = $toolbar.find( '#spriteedit-toolbox' );
+		$toolbox.append(
+			$( '<option>' ).prop( {
+				value: 'deprecate',
+				title: 'Toggle names as deprecated'
+			} ).text( 'Deprecate' )
+		);
 		
 		
 		var contentPadding = {
@@ -486,8 +495,60 @@ var create = function( state ) {
 			$( this ).blur();
 		} );
 		
+		// Toolbox functions
+		var toolNamespace = '.spriteEdit.spriteEditTool.spriteEditTool';
+		var tool;
+		// Bind events for each tool's function
+		$toolbox.on( 'change.spriteEdit', function( e ) {
+			tool = $toolbox.val();
+			$root.addClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
+			$doc.find( '.spritedoc-name' ).find( 'code' ).attr( 'contenteditable', false );
+			
+			switch ( tool ) {
+				case 'deprecate':
+					$doc.on( 'click' + toolNamespace + 'Deprecate', '.spritedoc-name > code', function( e ) {
+						change( 'toggle deprecation', { $elem: $( this ) } );
+						e.preventDefault();
+					} );
+				break;
+			}
+		} );
+		// Clear tool when clicking a toolbar button, the toolbox itself, or pressing escape
+		var clearTool = function( e ) {
+			if ( !$toolbox.val() ) {
+				return;
+			}
+			
+			$toolbox.val( '' );
+			$doc.off( '.spriteEditTool' );
+			$doc.find( '.spritedoc-name' ).find( 'code' ).attr( 'contenteditable', true );
+			$root.removeClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
+			tool = null;
+			
+			// If clicking on the toolbox itself
+			if ( e ) {
+				e.preventDefault();
+				$toolbox.blur();
+				$win.focus();
+			}
+		};
+		$toolbar.on( 'mouseup.spriteEdit', 'button', function() {
+			clearTool();
+		} );
+		$toolbox.on( 'mousedown.spriteEdit', function( e ) {
+			if ( e.which == 1 && $toolbox.is( e.target ) ) {
+				clearTool( e );
+			}
+		} );
+		$win.on( 'keyup.spriteEdit', function( e ) {
+			// Esc
+			if ( e.keyCode === 27 ) {
+				clearTool( e );
+			}
+		} );
+		
 		// Drag and drop functionality
-		if ( dropSupported ) {
+		if ( dropSupported && imageEditingSupported ) {
 			var $dropzone = $toolbar.find( '.spriteedit-dropzone' );
 			var endDrop = function() {
 				clearTimeout( dragTimeout );
@@ -754,9 +815,16 @@ var create = function( state ) {
 					if ( pos === undefined ) {
 						pos = $box.data( 'new-pos' );
 					}
-					$box.find( '.spritedoc-name' ).each( function() {
-						var id = $( this ).text();
-						ids.push( { sortKey: id.toLowerCase(), id: id, pos: pos, section: sectionId } );
+					$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
+						var $this = $( this );
+						var id = $this.text();
+						ids.push( {
+							sortKey: id.toLowerCase(),
+							id: id,
+							pos: pos,
+							section: sectionId,
+							deprecated: $this.hasClass( 'spritedoc-deprecated' )
+						} );
 					} );
 				} );
 			} );
@@ -766,9 +834,17 @@ var create = function( state ) {
 			
 			var idsRows = [];
 			$.each( ids, function() {
+				var idData = [
+					'pos = ' + this.pos,
+					'section = ' + this.section
+				];
+				if ( this.deprecated ) {
+					idData.push( 'deprecated = true' );
+				}
+				
 				idsRows.push(
 					'[' + luaStringQuote( this.id ) + '] = ' +
-					'{ pos = ' + this.pos + ', section = ' + this.section + ' },'
+					'{ ' + idData.join( ', ' ) + ' },'
 				);
 			} );
 			
@@ -1983,7 +2059,7 @@ var create = function( state ) {
 			} );
 			
 			sorting = true;
-			$root.addClass( 'spriteedit-sorting' );
+			$root.addClass( 'spriteedit-sorting spriteedit-hidecontrols' );
 			
 			requestAnimationFrame( mouseMove );
 			
@@ -2088,7 +2164,7 @@ var create = function( state ) {
 			$( document ).off( 'selectstart' );
 			
 			sorting = false;
-			$root.removeClass( 'spriteedit-sorting' );
+			$root.removeClass( 'spriteedit-sorting spriteedit-hidecontrols' );
 		} );
 	};
 	
@@ -2200,6 +2276,10 @@ var create = function( state ) {
 					if ( !$doc.find( '.spriteedit-new' ).length ) {
 						modified.sheet = false;
 					}
+				break;
+				
+				case 'toggle deprecation':
+					content.$elem.toggleClass( 'spritedoc-deprecated' );
 				break;
 			}
 			
@@ -2313,6 +2393,10 @@ var create = function( state ) {
 				
 				case 'reset image':
 					change( 'replace image', content, false, true );
+				break;
+				
+				case 'toggle deprecation':
+					change( 'toggle deprecation', content, false, true );
 				break;
 			}
 		}

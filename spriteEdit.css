@@ -54,6 +54,13 @@ html.spriteedit-sorting * {
 .spriteedit-toolbar button {
 	float: none;
 }
+.spriteedit-tool-deprecate .spritedoc-name > code {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	cursor: pointer;
+}
 .spriteedit-dropzone {
 	display: none;
 	position: absolute;
@@ -118,8 +125,8 @@ html.spriteedit-imageeditingenabled .spritedoc-image {
 	padding: 1px 0 2px;
 	width: 100%;
 }
-html.spriteedit-sorting .spriteedit-handle,
-html.spriteedit-sorting .spriteedit-add-name {
+html.spriteedit-hidecontrols .spriteedit-handle,
+html.spriteedit-hidecontrols .spriteedit-add-name {
 	visibility: hidden !important;
 	opacity: 0 !important;
 	transition: visibility, opacity !important;
