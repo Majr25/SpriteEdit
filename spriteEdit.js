@@ -15,8 +15,7 @@ var imageEditingSupported = ( function() {
 		window.FormData &&
 		window.ProgressEvent &&
 		URL && URL.revokeObjectURL && URL.createObjectURL &&
-		document.createElement( 'canvas' ).getContext && 
-		'crossOrigin' in new Image()
+		document.createElement( 'canvas' ).getContext
 	) {
 		return true;
 	}
@@ -110,36 +109,54 @@ var create = function( state ) {
 		$( '#ca-view' ).add( '#ca-spriteedit' ).toggleClass( 'selected' );
 	}
 	
-	var $sprite = $doc.find( '.sprite' ).first();
-	settings.imageWidth = $sprite.width();
-	settings.imageHeight = $sprite.height();
-	settings.sheet = $doc.data( 'original-url' );
-	if ( !settings.sheet ) {
-		settings.sheet = $sprite.css( 'background-image' )
-			.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
-		$doc.data( 'original-url', settings.sheet );
-	}
-	settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + new Date().getTime();
-	
-	var spritesheetReady = $.Deferred();
-	
-	spritesheet = new Image();
-	spritesheet.onload = function() {
-		settings.sheetWidth = this.width;
-		settings.sheetHeight = this.height;
+	if ( imageEditingSupported ) {
+		var $sprite = $doc.find( '.sprite' ).first();
+		settings.imageWidth = $sprite.width();
+		settings.imageHeight = $sprite.height();
+		settings.sheet = $doc.data( 'original-url' );
+		if ( !settings.sheet ) {
+			settings.sheet = $sprite.css( 'background-image' )
+				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
+			$doc.data( 'original-url', settings.sheet );
+		}
+		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + new Date().getTime();
+		
+		var spritesheetReady = $.Deferred();
 		
 		// Replace the spritesheet with a fresh uncached one to ensure
-		// we don't save over it with an old version
-		if ( inlineStyle ) {
-			inlineStyle.disabled = true;
-		}
-		inlineStyle = mw.util.addCSS(
-			'#spritedoc .sprite { background-image: url(' + this.src + ') !important }'
-		);
-		spritesheetReady.resolve();
-	};
-	spritesheet.crossOrigin = 'anonymous';
-	spritesheet.src = settings.sheet;
+		// we don't save over it with an old version.
+		// XHR is used instead of a CORS Image so a blob URL can
+		// be used for the background image, rather than the real URL.
+		// This works around the image being downloaded twice, probably
+		// caused by the background image not reusing the CORS request.
+		var xhr = new XMLHttpRequest();
+		xhr.open( 'GET', settings.sheet, true );
+		xhr.responseType = 'blob';
+		xhr.onload = function() {
+			if ( this.status !== 200 ) {
+				return;
+			}
+			
+			spritesheet = new Image();
+			spritesheet.onload = function() {
+				settings.sheetWidth = this.width;
+				settings.sheetHeight = this.height;
+				
+				if ( inlineStyle ) {
+					inlineStyle.disabled = true;
+					URL.revokeObjectURL( inlineStyle.url );
+				}
+				inlineStyle = mw.util.addCSS(
+					'#spritedoc .sprite { background-image: url(' + this.src + ') !important }'
+				);
+				inlineStyle.url = this.src;
+				
+				spritesheetReady.resolve();
+			};
+			spritesheet.src = URL.createObjectURL( this.response );
+		};
+		xhr.send();
+	}
 	
 	revisionsApi.get( {
 		rvprop: 'timestamp',
@@ -167,7 +184,7 @@ var create = function( state ) {
 			oldHtml = $doc.html();
 		}
 		
-		$.when( spritesheetReady, newContentReady ).done( function() {
+		$.when( newContentReady ).done( function() {
 			// Make sure the editor wasn't destroyed while we were waiting
 			if ( $root.hasClass( 'spriteedit-loaded' ) ) {
 				enable();
@@ -499,7 +516,7 @@ var create = function( state ) {
 		var toolNamespace = '.spriteEdit.spriteEditTool.spriteEditTool';
 		var tool;
 		// Bind events for each tool's function
-		$toolbox.on( 'change.spriteEdit', function( e ) {
+		$toolbox.on( 'change.spriteEdit', function() {
 			tool = $toolbox.val();
 			$root.addClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
 			$doc.find( '.spritedoc-name' ).find( 'code' ).attr( 'contenteditable', false );
@@ -695,71 +712,73 @@ var create = function( state ) {
 			);
 			
 			if ( modified.sheet ) {
-				var sheetCanvas = getCanvas( 'sheet' );
-				var lastPos = $doc.data( 'pos' );
-				var usedPos = {};
-				usedPos[lastPos] = true;
-				
-				var newImgs = [];
-				$doc.find( '.spritedoc-box' ).each( function() {
-					var $box = $( this );
-					var pos = $box.data( 'pos' );
-					if ( pos === undefined ) {
-						newImgs.push( $box );
-					} else {
-						usedPos[pos] = true;
-						if ( pos > lastPos ) {
-							lastPos = pos;
-						}
-					}
-				} );
-				
-				if ( newImgs.length ) {
-					var unusedPos = [];
-					for ( var i = 1; i <= lastPos; i++ ) {
-						if ( !usedPos[i] ) {
-							unusedPos.push( i );
-						}
-					}
+				spritesheetReady.done( function() {
+					var sheetCanvas = getCanvas( 'sheet' );
+					var lastPos = $doc.data( 'pos' );
+					var usedPos = {};
+					usedPos[lastPos] = true;
 					
-					var origLastPos = lastPos;
-					newImgs.forEach( function( $box ) {
-						$box.data( 'new-pos', unusedPos.shift() || ++lastPos );
-					} );
-					
-					if ( lastPos !== origLastPos ) {
-						var imagesPerRow = settings.sheetWidth / settings.imageWidth;
-						settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
-						sheetCanvas.resize();
-					}
-				}
-				
-				$.when.apply( $, loadingImages ).done( function() {
-					sheetCanvas.clear();
-					sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
-					
-					$doc.find( '.spriteedit-new' ).each( function() {
+					var newImgs = [];
+					$doc.find( '.spritedoc-box' ).each( function() {
 						var $box = $( this );
-						var img = $box.find( 'img' )[0];
 						var pos = $box.data( 'pos' );
 						if ( pos === undefined ) {
-							pos = $box.data( 'new-pos' );
+							newImgs.push( $box );
+						} else {
+							usedPos[pos] = true;
+							if ( pos > lastPos ) {
+								lastPos = pos;
+							}
+						}
+					} );
+					
+					if ( newImgs.length ) {
+						var unusedPos = [];
+						for ( var i = 1; i <= lastPos; i++ ) {
+							if ( !usedPos[i] ) {
+								unusedPos.push( i );
+							}
 						}
 						
-						var posPx = posToPx( pos );
-						sheetCanvas.ctx.clearRect(
-							posPx.left,
-							posPx.top,
-							settings.imageWidth,
-							settings.imageHeight
-						);
-						sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
-					} );
-					sheetData = sheetCanvas.canvas.toDataURL();
+						var origLastPos = lastPos;
+						newImgs.forEach( function( $box ) {
+							$box.data( 'new-pos', unusedPos.shift() || ++lastPos );
+						} );
+						
+						if ( lastPos !== origLastPos ) {
+							var imagesPerRow = settings.sheetWidth / settings.imageWidth;
+							settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
+							sheetCanvas.resize();
+						}
+					}
 					
-					loadingImages = [];
-					$button.removeClass( 'spriteedit-processing' );
-					summaryPanel.show();
+					$.when.apply( null, loadingImages ).done( function() {
+						sheetCanvas.clear();
+						sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
+						
+						$doc.find( '.spriteedit-new' ).each( function() {
+							var $box = $( this );
+							var img = $box.find( 'img' )[0];
+							var pos = $box.data( 'pos' );
+							if ( pos === undefined ) {
+								pos = $box.data( 'new-pos' );
+							}
+							
+							var posPx = posToPx( pos );
+							sheetCanvas.ctx.clearRect(
+								posPx.left,
+								posPx.top,
+								settings.imageWidth,
+								settings.imageHeight
+							);
+							sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
+						} );
+						sheetData = sheetCanvas.canvas.toDataURL();
+						
+						loadingImages = [];
+						$button.removeClass( 'spriteedit-processing' );
+						summaryPanel.show();
+					} );
 				} );
 			} else {
 				sheetData = null;
@@ -908,20 +927,22 @@ var create = function( state ) {
 			}
 			
 			if ( sheetData ) {
-				$changesText.find( '.spriteedit-sheet-changes' ).append(
-					$( '<div>' ).text( 'Spritesheet changes' ),
-					$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
-						$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append(
-							$( '<img>' ).attr( 'src', settings.sheet )
-						),
-						$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append(
-							$( '<img>' ).attr( 'src', sheetData )
+				var sheetChangesReady = $.Deferred();
+				var newSpritesheet = new Image();
+				newSpritesheet.onload = function() {
+					$changesText.find( '.spriteedit-sheet-changes' ).append(
+						$( '<div>' ).text( 'Spritesheet changes' ),
+						$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
+							$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
+							$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
 						)
-					)
-				);
+					);
+					sheetChangesReady.resolve();
+				};
+				newSpritesheet.src = sheetData;
 			}
 			
-			idChanges.done( function( diff ) {
+			$.when( sheetChangesReady, idChanges ).done( function( _, diff ) {
 				if ( diff ) {
 					$changesText.find( '.spriteedit-id-changes' ).append(
 						$( '<div>' ).text( 'ID changes' ),
