@@ -84,6 +84,13 @@ var create = function( state ) {
 		rvprop: 'content',
 		utf8: true
 	} } );
+	var parseApi = new mw.Api( { parameters: {
+		action: 'parse',
+		prop: 'text',
+		disablepp: true,
+		disabletoc: true,
+		utf8: true
+	} } );
 	var $headingTemplate = $( '<h3>' ).html(
 		$( '<span>' )
 			.addClass( 'mw-headline spriteedit-new' )
@@ -132,8 +139,12 @@ var create = function( state ) {
 		var xhr = new XMLHttpRequest();
 		xhr.open( 'GET', settings.sheet, true );
 		xhr.responseType = 'blob';
+		spritesheetReady.fail( function() {
+			xhr.abort();
+		} );
 		xhr.onload = function() {
 			if ( this.status !== 200 ) {
+				spritesheetReady.reject();
 				return;
 			}
 			
@@ -158,40 +169,104 @@ var create = function( state ) {
 		xhr.send();
 	}
 	
-	revisionsApi.get( {
+	// Check if the IDs page has been edited since opening
+	// the page and download the latest version if so
+	var newContentReady = $.Deferred();
+	var timestampRequest = revisionsApi.get( {
 		rvprop: 'timestamp',
 		pageids: idsPageId
 	} ).done( function( data ) {
 		var currentTimestamp = fixTimestamp( data.query.pages[idsPageId].revisions[0].timestamp );
-		var newContentReady;
 		if ( currentTimestamp > $doc.data( 'idstimestamp' ) ) {
 			$doc.data( 'idstimestamp', currentTimestamp );
 			
-			newContentReady = new mw.Api().get( {
-				action: 'parse',
+			var newContentRequest = parseApi.get( {
 				title: mw.config.get( 'wgPageName' ),
 				text: $( '<i>' ).html(
 					$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-				).html(),
-				prop: 'text',
-				disablepp: true,
-				disabletoc: true
+				).html()
 			} ).done( function( data ) {
 				oldHtml = data.parse.text['*'];
 				$doc.html( oldHtml );
+				newContentReady.resolve();
+			} ).fail( function( code, data ) {
+				console.error( code, data );
+				newContentReady.reject();
+			} );
+			newContentReady.fail( function() {
+				newContentRequest.abort();
 			} );
 		} else {
 			oldHtml = $doc.html();
+			newContentReady.resolve();
 		}
-		
-		$.when( newContentReady ).done( function() {
-			// Make sure the editor wasn't destroyed while we were waiting
-			if ( $root.hasClass( 'spriteedit-loaded' ) ) {
-				enable();
-			}
-		} );
 	} ).fail( function( code, data ) {
 		console.error( code, data );
+		newContentReady.reject();
+	} );
+	newContentReady.fail( function() {
+		timestampRequest.abort();
+	} );
+	
+	// Check if we have permission to edit the IDs page and
+	// spritesheet file and that the user isn't blocked
+	var permissionsRequest = new mw.Api().get( {
+		action: 'query',
+		meta: 'userinfo',
+		uiprop: 'rights|blockinfo'
+	} ).done( function( data ) {
+		var info = data.query.userinfo;
+		
+		var canEdit = true;
+		if ( info.blockid ) {
+			canEdit = false;
+			var $blockNotice = $( '<p>' ).text( 'You cannot edit this sprite as you are blocked.' );
+			var reasonParsed;
+			if ( info.blockreason ) {
+				reasonParsed = parseApi.get( {
+					summary: info.blockreason
+				} ).done( function( data ) {
+					$blockNotice.append( '<br>', 'Reason: ',
+						$( '<span>' ).addClass( 'comment' ).html( data.parse.parsedsummary['*'] )
+					);
+				} );
+			}
+			$.when( reasonParsed ).always( function() {
+				mw.notify( $blockNotice, { autoHide: false } );
+			} );
+		}
+		
+		if ( canEdit ) {
+			var rights = info.rights;
+			$.each( [ 'ids', 'sprite' ], function() {
+				var requiredRights = $doc.data( this + 'protection' ).split( ',' );
+				$.each( requiredRights, function() {
+					if ( rights.indexOf( this ) === -1 ) {
+						canEdit = false;
+						return false;
+					}
+				} );
+				
+				return canEdit;
+			} );
+			
+			if ( !canEdit ) {
+				mw.notify( 'You do not have permission to edit this sprite.', { autoHide: false } );
+			}
+		}
+		
+		if ( !canEdit ) {
+			newContentReady.reject();
+			spritesheetReady && spritesheetReady.reject();
+			destroy();
+		}
+	} );
+	
+	$.when( newContentReady, permissionsRequest ).done( function() {
+		// Make sure the editor wasn't destroyed while we were waiting
+		if ( $root.hasClass( 'spriteedit-loaded' ) ) {
+			enable();
+		}
 	} );
 	
 	// Handle closing the editor on navigation
@@ -1337,15 +1412,11 @@ var create = function( state ) {
 			$.when( sheetEdit ).done( function() {
 				var newContent;
 				if ( refresh ) {
-					newContent = new mw.Api().get( {
-						action: 'parse',
+					newContent = parseApi.get( {
 						title: mw.config.get( 'wgPageName' ),
 						text: $( '<i>' ).html(
 							$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-						).html(),
-						prop: 'text',
-						disablepp: true,
-						disabletoc: true
+						).html()
 					} );
 				}
 				
@@ -2558,12 +2629,19 @@ var create = function( state ) {
 			}
 		}
 		
+		var enabled = $root.hasClass( 'spriteedit-enabled' );
+		
 		$root.removeClass( 'spriteedit-loaded spriteedit-enabled spriteedit-imageeditingenabled' );
 		
 		var $viewTab = $( '#ca-view' );
 		$viewTab.add( '#ca-spriteedit' ).toggleClass( 'selected' );
 		
 		$doc.add( $viewTab.find( 'a' ) ).off( '.spriteEdit' );
+		
+		// No furthur cleanup necessary
+		if ( !enabled ) {
+			return;
+		}
 		
 		$( '.mw-editsection' ).add( '.mw-editsection-like' ).css( 'display', '' );
 		
