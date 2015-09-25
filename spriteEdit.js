@@ -477,10 +477,7 @@ var create = function( state ) {
 					selected: true,
 					value: ''
 				} ).css( 'display', 'none' ).text( 'Tools' )
-			),
-			$( '<div>' ).addClass( 'spriteedit-dropzone' ).append(
-				$( '<div>' ).text( 'Drop images here' )
-			).height( $win.height() / 4 )
+			)
 		);
 		if ( !imageEditingSupported ) {
 			$toolbar.find( '#spriteedit-add-image' ).prop( {
@@ -641,96 +638,33 @@ var create = function( state ) {
 		
 		// Drag and drop functionality
 		if ( dropSupported && imageEditingSupported ) {
-			var $dropzone = $toolbar.find( '.spriteedit-dropzone' );
+			var dragTimeout, dragEnded;
 			var endDrop = function() {
-				clearTimeout( dragTimeout );
-				hideDrag = false;
-				showDrag = true;
-				clearTimeout( dropTimeout );
-				hideDrop = false;
-				showDrop = true;
+				$root.removeClass( 'spriteedit-dragging' );
 				
-				$dropzone.css( 'opacity', 0 ).transitionEnd( function() {
-					$dropzone.css( 'display', '' );
-				} ).find( 'div' ).css( 'padding', '' );
-				$toolbar.css( 'height', '' ).find( 'span' ).css( 'opacity', 1 );
+				clearTimeout( dragTimeout );
+				dragEnded = false;
 			};
-			var dragTimeout, showDrag = true, hideDrag = false;
-			$win.on( 'dragenter.spriteEdit', function() {
-				if ( showDrag ) {
-					$dropzone.css( 'display', 'block' ).off( 'transitionend.spriteEdit' );
-					setImmediate( function() {
-						$dropzone.css( 'opacity', 1 );
-					} );
-					$toolbar.find( 'span' ).css( 'opacity', 0.3 );
-					showDrag = false;
-				}
+			$win.on( 'dragenter.spriteEdit dragover.spriteEdit', function( e ) {
+				$root.addClass( 'spriteedit-dragging' );
 				
 				clearTimeout( dragTimeout );
-				hideDrag = false;
-			} ).on( 'dragover.spriteEdit', function() {
-				hideDrag = false;
+				dragEnded = false;
+				e.preventDefault();
 			} ).on( 'dragleave.spriteEdit', function() {
 				clearTimeout( dragTimeout );
-				hideDrag = true;
+				dragEnded = true;
 				dragTimeout = setTimeout( function() {
-					if ( hideDrag ) {
+					if ( dragEnded ) {
 						endDrop();
-						showDrag = true;
 					}
 				}, 1 );
 			} ).on( 'dragend', endDrop );
 			
-			var dropTimeout, showDrop = true, hideDrop = false;
-			$dropzone.on( 'dragenter.spriteEdit', function( e ) {
-				if ( showDrop ) {
-					var $dropText = $dropzone.find( 'div' );
-					$dropText.css( 'line-height', $dropText.css( 'line-height' ) )
-						.off( 'transitionend.spriteEdit' );
-					$toolbar.innerHeight( $toolbar.innerHeight() ).off( 'transitionend.spriteEdit' );
-					setImmediate( function() {
-						$dropText.css( 'line-height', $dropzone.height() + 'px' );
-						$toolbar.innerHeight( $dropzone.innerHeight() )
-							.find( 'span' ).css( 'opacity', 0 );
-					} );
-					showDrop = false;
-				}
-				
-				clearTimeout( dropTimeout );
-				hideDrop = false;
-				e.preventDefault();
-			} ).on( 'dragover.spriteEdit', function( e ) {
-				clearTimeout( dropTimeout );
-				hideDrop = false;
-				
-				e.preventDefault();
-			} ).on( 'drop.spriteEdit', function( e ) {
-				insertSprites( e.originalEvent.dataTransfer.files );
+			$doc.on( 'drop.spriteEdit', '.spritedoc-section', function( e ) {
+				insertSprites( e.originalEvent.dataTransfer.files, this );
 				endDrop();
 				e.preventDefault();
-			} ).on( 'dragleave.spriteEdit', function() {
-				clearTimeout( dropTimeout );
-				hideDrop = true;
-				dropTimeout = setTimeout( function() {
-					if ( hideDrop ) {
-						var $dropText = $dropzone.find( 'div' );
-						var oldLineHeight = $dropText.css( 'line-height' );
-						var newLineHeight = $dropText.css( 'line-height', '' ).css( 'line-height' );
-						$dropText.css( 'line-height', oldLineHeight ).transitionEnd( function() {
-							$dropText.css( 'line-height', '' );
-						} );
-						var oldHeight = $toolbar.innerHeight();
-						var newHeight = $toolbar.css( 'height', '' ).innerHeight();
-						$toolbar.innerHeight( oldHeight ).transitionEnd( function() {
-							$toolbar.css( 'height', '' );
-						} );
-						setImmediate( function() {
-							$dropText.css( 'line-height', newLineHeight );
-							$toolbar.innerHeight( newHeight ).find( 'span' ).css( 'opacity', 0.3 );
-						} );
-						showDrop = true;
-					}
-				}, 1 );
 			} );
 		}
 		
@@ -1571,10 +1505,12 @@ var create = function( state ) {
 	 * The box is inserted into the nearest section and then sorted to the correct location.
 	 * Any file that doesn't match the image/* mime type is ignored.
 	 *
-	 * "files" is a "FileList" (or an array of "File" objects) from a file input or dropzone.
+	 * "files" is a "FileList" (or an array of "File" objects) from a file input or drop.
+	 * "section" is an Element which is the section to place the sprites in. Defaults to
+	 * the nearestSection()
 	 */
-	var insertSprites = function( files ) {
-		var $parent = $( nearestSection() ).find( '.spritedoc-boxes' );
+	var insertSprites = function( files, section ) {
+		var $parent = $( section || nearestSection() ).find( '.spritedoc-boxes' );
 		$.each( files, function() {
 			if ( !this.type.match( /^image\// ) ) {
 				return;

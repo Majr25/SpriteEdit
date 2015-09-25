@@ -61,21 +61,11 @@ html.spriteedit-sorting * {
 	user-select: none;
 	cursor: pointer;
 }
-.spriteedit-dropzone {
-	display: none;
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	padding: 1em;
-	box-sizing: border-box;
-	opacity: 1;
-	transition: opacity 200ms;
-}
-.spriteedit-dropzone > div {
-	border: 1px dashed gray;
-	text-align: center;
-	transition: line-height 200ms;
+
+/* Hover doesn't work while dragging, so this will just have to
+ * always be shown */
+.spriteedit-dragging .spritedoc-section {
+	outline: 1px dashed #000;
 }
 
 .spritedoc-box:hover {
