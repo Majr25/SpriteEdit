@@ -2245,7 +2245,7 @@ var create = function( state ) {
 						content.$parent.children().eq( content.index ).after( content.$elem );
 					}
 					
-					if ( !moved && isBox ) {
+					if ( !moved && ( isBox || content.$elem.hasClass( 'spritedoc-section' ) ) ) {
 						content.$elem.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 							updateName( undefined, $( this ).text(), $( this ) );
 						} );
@@ -2273,7 +2273,7 @@ var create = function( state ) {
 					
 					content.$elem.detach();
 					
-					if ( isBox ) {
+					if ( isBox || content.$elem.hasClass( 'spritedoc-section' ) ) {
 						content.$elem.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 							updateName( $( this ).text(), undefined, $( this ) );
 						} );
