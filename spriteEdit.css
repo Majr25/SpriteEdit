@@ -31,9 +31,11 @@ html.spriteedit-sorting * {
 	z-index: 91;
 }
 .spriteedit-toolbar {
+	position: relative;
 	background-color: #80b640;
 	border-bottom: 4px solid #3c6a02;
 	padding: 0.5em 0;
+	overflow: hidden;
 	transition: height 200ms;
 	z-index: 91;
 }
@@ -43,15 +45,10 @@ html.spriteedit-sorting * {
 	right: 0;
 	margin: 0 !important;
 }
-.spriteedit-toolbar > span {
-	margin: 0;
-	opacity: 1;
-	transition: opacity 200ms;
-}
 .spriteedit-toolbar > .mw-ui-button-group {
 	margin-right: 1em;
 }
-.spriteedit-toolbar button {
+.spriteedit-toolbar .mw-ui-button {
 	float: none;
 }
 .spriteedit-tool-deprecate .spritedoc-name > code {
@@ -60,6 +57,29 @@ html.spriteedit-sorting * {
 	-ms-user-select: none;
 	user-select: none;
 	cursor: pointer;
+}
+#spriteedit-save {
+	position: absolute;
+	right: 0;
+	bottom: 0.5em;
+}
+#spriteedit-saveform {
+	display: -webkit-flex;
+	display: -ms-flex;
+	display: flex;
+	margin-top: 0.5em;
+}
+#spriteedit-summary {
+	margin-right: 0.5em;
+	-webkit-flex: auto;
+	-ms-flex: auto;
+	flex: auto;
+}
+#spriteedit-review-button {
+	margin-right: 0.5em;
+	-webkit-flex: none;
+	-ms-flex: none;
+	flex: none;
 }
 
 /* Hover doesn't work while dragging, so this will just have to
@@ -73,6 +93,8 @@ html.spriteedit-sorting * {
 }
 
 .spriteedit-handle {
+	-webkit-flex: none;
+	-ms-flex: none;
 	flex: none;
 	background: #AAA;
 	background: linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 0 0, linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 2px 2px;
@@ -232,6 +254,8 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 }
 
 .spriteedit-dialog-overlay {
+	display: -webkit-flex;
+	display: -ms-flex;
 	display: flex;
 	align-items: center;
 	position: fixed;

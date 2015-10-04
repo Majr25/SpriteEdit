@@ -105,9 +105,11 @@ var create = function( state ) {
 	addControls( $headingTemplate, 'heading' );
 	addControls( $boxTemplate, 'box' );
 	
-	$root.addClass( 'spriteedit-loaded' );
+	// Pre-load modules which will be needed later
 	// TODO: Change to "mediawiki.ui.input" on MW1.25 update
-	mw.loader.load( 'mediawiki.ui' );
+	mw.loader.load( [ 'mediawiki.ui', 'mediawiki.action.history.diff' ] );
+	
+	$root.addClass( 'spriteedit-loaded' );
 	
 	if ( !state && historySupported ) {
 		history.pushState( {}, '', mw.util.getUrl( null, { spriteaction: 'edit' } ) );
@@ -422,18 +424,17 @@ var create = function( state ) {
 		} );
 		
 		// Create toolbar
-		$toolbar = $( '<div>' ).addClass( 'spriteedit-toolbar' );
+		var contentPadding = {
+			left: $content.css( 'padding-left' ),
+			right: $content.css( 'padding-right' )
+		};
+		$toolbar = $( '<div>' ).addClass( 'spriteedit-toolbar' ).css( {
+			paddingLeft: contentPadding.left,
+			paddingRight: contentPadding.right,
+			marginLeft: '-' + contentPadding.left,
+			marginRight: '-' + contentPadding.right
+		} );
 		$toolbar.append(
-			$( '<span>' ).css( {
-				'float': 'right',
-				textAlign: 'right'
-			} ).append(
-				makeButton( 'Save', {
-					id: 'spriteedit-save',
-					type: 'progressive',
-					props: { disabled: true }
-				} )
-			),
 			$( '<span>' ).addClass( 'mw-ui-button-group' ).append(
 				makeButton( 'Undo', {
 					id: 'spriteedit-undo',
@@ -463,7 +464,14 @@ var create = function( state ) {
 							$( this ).prop( 'disabled', true );
 						}
 						
-						$( '#spriteedit-undo' ).add( '#spriteedit-save' ).prop( 'disabled', false );
+						$.each( [
+							'#spriteedit-undo',
+							'#spriteedit-save',
+							'#spriteedit-summary',
+							'#spriteedit-review-button'
+						], function() {
+							$( this ).prop( 'disabled', false );
+						} );
 					}
 				} )
 			),
@@ -477,7 +485,13 @@ var create = function( state ) {
 					selected: true,
 					value: ''
 				} ).css( 'display', 'none' ).text( 'Tools' )
-			)
+			),
+			makeButton( 'Save', {
+				id: 'spriteedit-save',
+				type: 'progressive',
+				props: { disabled: true },
+				css: { right: contentPadding.right }
+			} )
 		);
 		if ( !imageEditingSupported ) {
 			$toolbar.find( '#spriteedit-add-image' ).prop( {
@@ -495,20 +509,6 @@ var create = function( state ) {
 			} ).text( 'Deprecate' )
 		);
 		
-		
-		var contentPadding = {
-			left: $content.css( 'padding-left' ),
-			right: $content.css( 'padding-right' )
-		};
-		var contentOffset = $content.offset().left;
-		$toolbar.css( {
-			paddingLeft: contentPadding.left,
-			paddingRight: contentPadding.right,
-			marginLeft: '-' + contentPadding.left,
-			marginRight: '-' + contentPadding.right,
-			left: contentOffset + 1
-		} );
-		
 		var $barContainer = $( '<div>' ).addClass( 'spriteedit-toolbar-container' )
 			.append( $toolbar ).prependTo( $doc );
 		
@@ -519,10 +519,11 @@ var create = function( state ) {
 		}
 		
 		// Set height now that everything is re-attached
-		$barContainer.height( $toolbar[0].getBoundingClientRect().height );
+		var toolbarHeight = $toolbar[0].getBoundingClientRect().height;
+		$barContainer.height( toolbarHeight );
 		
 		// Wait until everything else is done so the animation is smooth
-		setImmediate( function() {
+		requestAnimationFrame( function() {
 			var barTop = $barContainer[0].getBoundingClientRect().top;
 			if ( barTop > 0 ) {
 				$root.addClass( 'spriteedit-smoothscroll' );
@@ -543,14 +544,15 @@ var create = function( state ) {
 		// Manually make the toolbar sticky if position:sticky isn't supported
 		if ( !supports( 'position', 'sticky' ) ) {
 			var fixedClass = 'spriteedit-toolbar-fixed';
+			var contentOffset = $content.offset().left + 1;
 			$win.on( 'scroll.spriteEdit', $.throttle( 50, function() {
 				var fixed = $toolbar.hasClass( fixedClass ),
 					scrollTop = $win.scrollTop(),
 					offset = $barContainer.offset().top;
 				if ( !fixed && scrollTop >= offset ) {
-					$toolbar.addClass( fixedClass );
+					$toolbar.addClass( fixedClass ).css( 'left', contentOffset );
 				} else if ( fixed && scrollTop < offset ) {
-					$toolbar.removeClass( fixedClass );
+					$toolbar.removeClass( fixedClass ).css( 'left', '' );
 				}
 			} ) );
 		}
@@ -629,7 +631,7 @@ var create = function( state ) {
 				clearTool( e );
 			}
 		} );
-		$win.on( 'keyup.spriteEdit', function( e ) {
+		$( document ).on( 'keydown.spriteEdit', function( e ) {
 			// Esc
 			if ( e.keyCode === 27 ) {
 				clearTool( e );
@@ -670,249 +672,103 @@ var create = function( state ) {
 		
 		$( '#spriteedit-save' ).on( 'click.spriteEdit', function() {
 			var $button = $( this );
-			if ( $button.hasClass( 'spriteedit-processing' ) ) {
-				return;
-			}
-			$button.blur().addClass( 'spriteedit-processing' );
+			$button.blur();
 			
-			// Prevent saving if there are duplicate names
+			// Prevent saving and notify if there are duplicate names
 			if ( $doc.find( '.spriteedit-dupe' ).length ) {
-				var dupeNamePanel = panels.dupename || panel(
-					'dupename',
-					'Duplicate names',
-					$( '<p>' )
-						.text( 'There are duplicate names which must be resolved prior to saving.' ),
-					{ right: { text: 'Return', config: {
-						type: 'progressive',
-						action: function() {
-							dupeNamePanel.hide();
-						}
-					} } }
+				mw.notify(
+					'There are duplicate names which must be resolved prior to saving.',
+					{ autoHide: false }
 				);
-				$button.removeClass( 'spriteedit-processing' );
-				dupeNamePanel.show();
 				
 				return;
 			}
 			
-			mw.loader.load( 'mediawiki.action.history.diff' );
-			
-			var summaryPanel = panels.summary || panel(
-				'summary',
-				'Save your changes',
-				$( '<textarea>' ).addClass( 'mw-ui-input' ).prop( {
-					placeholder: 'Summarize the changes you made',
-					maxlength: 255
-				} ),
-				{
-					left: { text: 'Review changes', config: { id: 'spriteedit-review-changes' } },
-					right: { text: 'Save', config: {
-						id: 'spriteedit-save-changes',
-						type: 'constructive'
-					} }
-				},
-				function() {
-					this.$text.find( 'textarea' ).focus();
-					this.$actions.find( 'button' )
-						.prop( 'disabled', false )
-						.removeClass( 'spriteedit-processing' );
-				},
-				true
-			);
-			
-			if ( modified.sheet ) {
-				spritesheetReady.done( function() {
-					var sheetCanvas = getCanvas( 'sheet' );
-					var lastPos = $doc.data( 'pos' );
-					var usedPos = {};
-					usedPos[lastPos] = true;
+			if ( $toolbar.hasClass( 'spriteedit-saveform-open' ) ) {
+				// Prevent saving if button already pressed
+				if ( $button.hasClass( 'spriteedit-processing' ) ) {
+					return;
+				}
+				
+				$button.addClass( 'spriteedit-processing' );
+				
+				if ( !idsTable ) {
+					parseNameChanges();
+				}
+				if ( modified.sheet && !sheetData ) {
+					parseSheetChanges();
+				}
+				
+				// If the diff is ready, we'll see if there are changes to be saved,
+				// otherwise it's likely faster to just save and assume changes
+				// were made, than wait for the diff to be ready
+				if ( modified.names === false && !modified.sheet ) {
+					destroy( true );
 					
-					var newImgs = [];
-					$doc.find( '.spritedoc-box' ).each( function() {
-						var $box = $( this );
-						var pos = $box.data( 'pos' );
-						if ( pos === undefined ) {
-							newImgs.push( $box );
-						} else {
-							usedPos[pos] = true;
-							if ( pos > lastPos ) {
-								lastPos = pos;
-							}
-						}
-					} );
-					
-					if ( newImgs.length ) {
-						var unusedPos = [];
-						for ( var i = 1; i <= lastPos; i++ ) {
-							if ( !usedPos[i] ) {
-								unusedPos.push( i );
-							}
-						}
-						
-						var origLastPos = lastPos;
-						newImgs.forEach( function( $box ) {
-							$box.data( 'new-pos', unusedPos.shift() || ++lastPos );
-						} );
-						
-						if ( lastPos !== origLastPos ) {
-							var imagesPerRow = settings.sheetWidth / settings.imageWidth;
-							settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
-							sheetCanvas.resize();
-						}
-					}
-					
-					$.when.apply( null, loadingImages ).done( function() {
-						sheetCanvas.clear();
-						sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
-						
-						$doc.find( '.spriteedit-new' ).each( function() {
-							var $box = $( this );
-							var img = $box.find( 'img' )[0];
-							var pos = $box.data( 'pos' );
-							if ( pos === undefined ) {
-								pos = $box.data( 'new-pos' );
-							}
-							
-							var posPx = posToPx( pos );
-							sheetCanvas.ctx.clearRect(
-								posPx.left,
-								posPx.top,
-								settings.imageWidth,
-								settings.imageHeight
-							);
-							sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
-						} );
-						sheetData = sheetCanvas.canvas.toDataURL();
-						
-						loadingImages = [];
-						$button.removeClass( 'spriteedit-processing' );
-						summaryPanel.show();
-					} );
-				} );
-			} else {
-				sheetData = null;
-				$button.removeClass( 'spriteedit-processing' );
-				summaryPanel.show();
+					return;
+				}
+				
+				saveChanges( $( '#spriteedit-summary' ).val(), idsTable );
+				
+				return;
 			}
 			
-			var $sections = $doc.find( '.spritedoc-section' );
-			var sectionIds = [];
-			var getSectionId = ( function() {
-				var id = 0;
-				return function() {
-					if ( id < sectionIds.length ) {
-						sectionIds.sort( function( a, b ) {
-							return a - b;
-						} );
-						
-						$.each( sectionIds, function( _, v ) {
-							if ( v - id > 1 ) {
-								return false;
-							}
-							id = v;
-						} );
-					}
-					
-					id++;
-					
-					sectionIds.push( id );
-					return id;
-				};
-			}() );
+			$toolbar.addClass( 'spriteedit-saveform-open' );
+			$button.addClass( 'mw-ui-constructive' ).removeClass( 'mw-ui-progressive' );
 			
-			$sections.each( function() {
-				var id = $( this ).data( 'section-id' );
-				if ( id !== undefined ) {
-					sectionIds.push( id );
-				}
-			} );
+			if ( !$toolbar.find( '#spriteedit-saveform' ).length ) {
+				$( '<div>' )
+					.attr( 'id', 'spriteedit-saveform' )
+					.css( 'margin-right', $( '#spriteedit-save' )[0].getBoundingClientRect().width )
+					.append(
+						$( '<input type="text">' ).addClass( 'mw-ui-input' ).attr( {
+							id: 'spriteedit-summary',
+							name: 'wpSummary', // For autocomplete
+							placeholder: 'Summarize the changes you made',
+							maxlength: 255,
+							spellcheck: true
+						} ),
+						makeButton( 'Review changes', { id: 'spriteedit-review-button' } )
+				).appendTo( $toolbar );
+			}
 			
-			var headingRows = [];
-			var ids = [];
-			$sections.each( function() {
-				var $section = $( this );
-				var sectionId = $section.data( 'section-id' ) || getSectionId();
-				var sectionName = $section.find( '.mw-headline' ).text();
-				headingRows.push(
-					'{ ' + luaStringQuote( sectionName ) + ', id = ' + sectionId + ' },'
-				);
-				
-				$section.find( '.spritedoc-box' ).each( function() {
-					var $box = $( this );
-					var pos = $box.data( 'pos' );
-					if ( pos === undefined ) {
-						pos = $box.data( 'new-pos' );
+			var openedToolbarHeight = $toolbar[0].getBoundingClientRect().height;
+			$toolbar
+				.outerHeight( toolbarHeight )
+				.redraw()
+				.outerHeight( openedToolbarHeight )
+				.transitionEnd( function() {
+					$barContainer.height( openedToolbarHeight );
+					$( '#spriteedit-summary' ).focus();
+					
+					// Do this after the transition so there is no stutter
+					if ( !idsTable ) {
+						parseNameChanges( true );
 					}
-					$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
-						var $this = $( this );
-						var id = $this.text();
-						ids.push( {
-							sortKey: id.toLowerCase(),
-							id: id,
-							pos: pos,
-							section: sectionId,
-							deprecated: $this.hasClass( 'spritedoc-deprecated' )
-						} );
-					} );
 				} );
-			} );
-			ids.sort( function( a, b ) {
-				return a.sortKey > b.sortKey ? 1 : -1;
-			} );
-			
-			var idsRows = [];
-			$.each( ids, function() {
-				var idData = [
-					'pos = ' + this.pos,
-					'section = ' + this.section
-				];
-				if ( this.deprecated ) {
-					idData.push( 'deprecated = true' );
-				}
-				
-				idsRows.push(
-					'[' + luaStringQuote( this.id ) + '] = ' +
-					'{ ' + idData.join( ', ' ) + ' },'
-				);
-			} );
-			
-			idsTable = [
-				'return {',
-				'	sections = {',
-				'		' + headingRows.join( '\n\t\t' ),
-				'	},',
-				'	ids = {',
-				'		' + idsRows.join( '\n\t\t' ),
-				'	}',
-				'}'
-			].join( '\n' );
-			
-			idChanges = $.Deferred();
-			revisionsApi.post( {
-				pageids: idsPageId,
-				rvprop: '',
-				rvdifftotext: idsTable,
-				rvlimit: 1
-			} ).done( function( data ) {
-				idChanges.resolve( makeDiff( data ) );
-			} )
-				// Don't handle error directly, so it can fail silently unless attempting
-				// to view the diff, as this isn't necessary for saving
-				.fail( idChanges.reject );
-			
-			idChanges.done( function( diff ) {
-				modified.names = !!diff;
-			} );
 		} );
 		
+		$doc.on( 'keydown.spriteEdit', '#spriteedit-summary', function( e ) {
+			// Anything but Enter
+			if ( e.which !== 13 ) {
+				return;
+			}
+			
+			$( this ).blur();
+			$( '#spriteedit-save' ).click();
+			e.preventDefault();
+		} );
 		
-		/* Dialog events */
-		$doc.on( 'click.spriteEdit', '#spriteedit-review-changes' , function() {
+		$doc.on( 'click.spriteEdit', '#spriteedit-review-button', function() {
 			var $button = $( this );
 			if ( $button.hasClass( 'spriteedit-processing' ) ) {
 				return;
 			}
 			$button.blur().addClass( 'spriteedit-processing' );
+			
+			if ( !idsTable ) {
+				parseNameChanges( true );
+			}
 			
 			var changesPanel = panels.changes || panel(
 				'changes',
@@ -920,11 +776,7 @@ var create = function( state ) {
 				[
 					$( '<div>' ).addClass( 'spriteedit-sheet-changes' ),
 					$( '<div>' ).addClass( 'spriteedit-id-changes' )
-				],
-				{ right: { text: 'Return to save form', config: {
-					id: 'spriteedit-return-save',
-					type: 'progressive'
-				} } }
+				]
 			);
 			var $changesText = changesPanel.$text;
 			
@@ -935,66 +787,44 @@ var create = function( state ) {
 				return;
 			}
 			
-			if ( sheetData ) {
-				var sheetChangesReady = $.Deferred();
+			if ( modified.sheet ) {
+				var sheetChanges = $.Deferred();
 				var newSpritesheet = new Image();
 				newSpritesheet.onload = function() {
-					$changesText.find( '.spriteedit-sheet-changes' ).append(
-						$( '<div>' ).text( 'Spritesheet changes' ),
-						$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
-							$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
-							$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
-						)
-					);
-					sheetChangesReady.resolve();
+					sheetChanges.resolve( newSpritesheet );
 				};
-				newSpritesheet.src = sheetData;
+				if ( !sheetData ) {
+					parseSheetChanges();
+				}
+				sheetData.done( function( data ) {
+					newSpritesheet.src = data;
+				} );
 			}
 			
-			$.when( sheetChangesReady, idChanges ).done( function( _, diff ) {
-				if ( diff ) {
-					$changesText.find( '.spriteedit-id-changes' ).append(
-						$( '<div>' ).text( 'ID changes' ),
-						$( '<div>' ).append( diff )
-					);
-				} else if ( !sheetData ) {
+			$.when( sheetChanges, idChanges ).done( function( newSpritesheet, diff ) {
+				if ( !newSpritesheet && !diff ) {
 					$changesText.text( 'No changes from current revision.' );
+				} else {
+					if ( newSpritesheet ) {
+						$changesText.find( '.spriteedit-sheet-changes' ).append(
+							$( '<div>' ).text( 'Spritesheet changes' ),
+							$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
+								$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
+								$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
+							)
+						);
+					}
+					if ( diff ) {
+						$changesText.find( '.spriteedit-id-changes' ).append(
+							$( '<div>' ).text( 'ID changes' ),
+							$( '<div>' ).append( diff )
+						);
+					}
 				}
 				
 				$button.removeClass( 'spriteedit-processing' );
 				changesPanel.show();
 			} ).fail( handleError );
-		} );
-		
-		$doc.on( 'click.spriteEdit', '#spriteedit-return-save', function() {
-			panels.summary.show();
-		} );
-		
-		$doc.on( 'click.spriteEdit', '#spriteedit-save-changes', function() {
-			if ( $( this ).hasClass( 'spriteedit-processing' ) ) {
-				return;
-			}
-			$( this ).blur().addClass( 'spriteedit-processing' );
-			
-			// If the diff is ready, we'll see if there are changes to be saved,
-			// otherwise it's likely faster to just save and assume changes
-			// were made, than wait for the diff to be ready
-			var idDiff = true;
-			if ( idChanges.state() === 'resolved' ) {
-				idChanges.done( function( data ) {
-					idDiff = data;
-				} );
-			}
-			if ( !idDiff && !sheetData ) {
-				panel().hide( function() {
-					destroy( true );
-				} );
-				
-				return;
-			}
-			
-			var summary = panels.summary.$text.find( 'textarea' ).val();
-			saveChanges( summary, idsTable );
 		} );
 		
 		
@@ -1022,7 +852,13 @@ var create = function( state ) {
 			
 			if ( !changes.length ) {
 				$this.one( 'keypress.spriteEdit', function() {
-					$( '#spriteedit-save' ).prop( 'disabled', false );
+					$.each( [
+						'#spriteedit-save',
+						'#spriteedit-summary',
+						'#spriteedit-review-button'
+					], function() {
+						$( this ).prop( 'disabled', false );
+					} );
 				} );
 			}
 		} );
@@ -1083,7 +919,13 @@ var create = function( state ) {
 			
 			if ( text === origText ) {
 				if ( !changes.length ) {
-					$( '#spriteedit-save' ).prop( 'disabled', true );
+					$.each( [
+						'#spriteedit-save',
+						'#spriteedit-summary',
+						'#spriteedit-review-button'
+					], function() {
+						$( this ).prop( 'disabled', true );
+					} );
 				}
 				
 				return;
@@ -1092,7 +934,7 @@ var create = function( state ) {
 			if ( names[text] ) {
 				// Wait until after edit change, as it may move the element
 				// which the tooltip should be anchored to
-				setImmediate( function() {
+				requestAnimationFrame( function() {
 					tooltip( $this, 'This name already exists.' );
 				} );
 			}
@@ -1281,6 +1123,200 @@ var create = function( state ) {
 	};
 	
 	/**
+	 * Constructs a lua table to of the current changes to upload
+	 * 
+	 * "withDiff" is a boolean determining whether a diff request should
+	 * also be performed on the table.
+	 */
+	var parseNameChanges = function( withDiff ) {
+		var $sections = $doc.find( '.spritedoc-section' );
+		var sectionIds = [];
+		var getSectionId = ( function() {
+			var id = 0;
+			return function() {
+				if ( id < sectionIds.length ) {
+					sectionIds.sort( function( a, b ) {
+						return a - b;
+					} );
+					
+					$.each( sectionIds, function( _, v ) {
+						if ( v - id > 1 ) {
+							return false;
+						}
+						id = v;
+					} );
+				}
+				
+				id++;
+				
+				sectionIds.push( id );
+				return id;
+			};
+		}() );
+		
+		$sections.each( function() {
+			var id = $( this ).data( 'section-id' );
+			if ( id !== undefined ) {
+				sectionIds.push( id );
+			}
+		} );
+		
+		var headingRows = [];
+		var ids = [];
+		$sections.each( function() {
+			var $section = $( this );
+			var sectionId = $section.data( 'section-id' ) || getSectionId();
+			var sectionName = $section.find( '.mw-headline' ).text();
+			headingRows.push(
+				'{ ' + luaStringQuote( sectionName ) + ', id = ' + sectionId + ' },'
+			);
+			
+			$section.find( '.spritedoc-box' ).each( function() {
+				var $box = $( this );
+				var pos = $box.data( 'pos' );
+				if ( pos === undefined ) {
+					pos = $box.data( 'new-pos' );
+				}
+				$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
+					var $this = $( this );
+					var id = $this.text();
+					ids.push( {
+						sortKey: id.toLowerCase(),
+						id: id,
+						pos: pos,
+						section: sectionId,
+						deprecated: $this.hasClass( 'spritedoc-deprecated' )
+					} );
+				} );
+			} );
+		} );
+		ids.sort( function( a, b ) {
+			return a.sortKey > b.sortKey ? 1 : -1;
+		} );
+		
+		var idsRows = [];
+		$.each( ids, function() {
+			var idData = [
+				'pos = ' + this.pos,
+				'section = ' + this.section
+			];
+			if ( this.deprecated ) {
+				idData.push( 'deprecated = true' );
+			}
+			
+			idsRows.push(
+				'[' + luaStringQuote( this.id ) + '] = ' +
+				'{ ' + idData.join( ', ' ) + ' },'
+			);
+		} );
+		
+		idsTable = [
+			'return {',
+			'	sections = {',
+			'		' + headingRows.join( '\n\t\t' ),
+			'	},',
+			'	ids = {',
+			'		' + idsRows.join( '\n\t\t' ),
+			'	}',
+			'}'
+		].join( '\n' );
+		
+		if ( !withDiff ) {
+			return;
+		}
+		
+		idChanges = $.Deferred();
+		revisionsApi.post( {
+			pageids: idsPageId,
+			rvprop: '',
+			rvdifftotext: idsTable,
+			rvlimit: 1
+		} ).done( function( data ) {
+			idChanges.resolve( makeDiff( data ) );
+		} )
+			// Don't handle error directly, so it can fail silently unless attempting
+			// to view the diff, as this isn't necessary for saving
+			.fail( idChanges.reject );
+		
+		idChanges.done( function( diff ) {
+			modified.names = !!diff;
+		} );
+	};
+	
+	/**
+	 * Adds the changed/new images to the spritesheet
+	 */
+	var parseSheetChanges = function() {
+		sheetData = $.Deferred();
+		spritesheetReady.done( function() {
+			var sheetCanvas = getCanvas( 'sheet' );
+			var lastPos = $doc.data( 'pos' );
+			var usedPos = {};
+			usedPos[lastPos] = true;
+			
+			var newImgs = [];
+			$doc.find( '.spritedoc-box' ).each( function() {
+				var $box = $( this );
+				var pos = $box.data( 'pos' );
+				if ( pos === undefined ) {
+					newImgs.push( $box );
+				} else {
+					usedPos[pos] = true;
+					if ( pos > lastPos ) {
+						lastPos = pos;
+					}
+				}
+			} );
+			
+			if ( newImgs.length ) {
+				var unusedPos = [];
+				for ( var i = 1; i <= lastPos; i++ ) {
+					if ( !usedPos[i] ) {
+						unusedPos.push( i );
+					}
+				}
+				
+				var origLastPos = lastPos;
+				newImgs.forEach( function( $box ) {
+					$box.data( 'new-pos', unusedPos.shift() || ++lastPos );
+				} );
+				
+				if ( lastPos !== origLastPos ) {
+					var imagesPerRow = settings.sheetWidth / settings.imageWidth;
+					settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
+					sheetCanvas.resize();
+				}
+			}
+			
+			$.when.apply( null, loadingImages ).done( function() {
+				sheetCanvas.clear();
+				sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
+				
+				$doc.find( '.spriteedit-new' ).each( function() {
+					var $box = $( this );
+					var img = $box.find( 'img' )[0];
+					var pos = $box.data( 'pos' );
+					if ( pos === undefined ) {
+						pos = $box.data( 'new-pos' );
+					}
+					
+					var posPx = posToPx( pos );
+					sheetCanvas.ctx.clearRect(
+						posPx.left,
+						posPx.top,
+						settings.imageWidth,
+						settings.imageHeight
+					);
+					sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
+				} );
+				sheetData.resolve( sheetCanvas.canvas.toDataURL() );
+				
+				loadingImages = [];
+			} );
+		} );
+	};
+	
+	/**
 	 * Performs a save of the ID changes and/or spritesheet changes
 	 *
 	 * If there are changes and everything works out, the editor closes, the current
@@ -1323,8 +1359,12 @@ var create = function( state ) {
 		}
 		$.when( idsEdit ).done( function() {
 			var sheetEdit;
-			if ( sheetData ) {
-				var sheetByteString = atob( sheetData.split( ',' )[1] );
+			$.when( sheetData ).done( function( data ) {
+				if ( !data ) {
+					return;
+				}
+				
+				var sheetByteString = atob( data.split( ',' )[1] );
 				var sheetByteStringLen = sheetByteString.length;
 				var buffer = new ArrayBuffer( sheetByteStringLen );
 				var intArray = new Uint8Array( buffer );
@@ -1342,8 +1382,8 @@ var create = function( state ) {
 					filename: $doc.data( 'spritesheet' ),
 					file: sheetBytes
 				} ).fail( handleError );
-			}
-			$.when( sheetEdit ).done( function() {
+			} );
+			$.when( sheetData, sheetEdit ).done( function() {
 				var newContent;
 				if ( refresh ) {
 					newContent = parseApi.get( {
@@ -1355,15 +1395,13 @@ var create = function( state ) {
 				}
 				
 				$.when( newContent ).done( function( data ) {
-					panel().hide( function() {
-						if ( refresh ) {
-							$doc.html( data.parse.text['*'] );
-						}
-						
-						destroy();
-						
-						mw.hook( 'postEdit' ).fire( { message: 'Your changes were saved.' } );
-					} );
+					if ( refresh ) {
+						$doc.html( data.parse.text['*'] );
+					}
+					
+					destroy();
+					
+					mw.hook( 'postEdit' ).fire( { message: 'Your changes were saved.' } );
 				} );
 			} );
 		} );
@@ -1440,7 +1478,7 @@ var create = function( state ) {
 						}
 						$( this ).blur().addClass( 'spriteedit-processing' );
 						
-						var summary = panels.summary.$text.find( 'textarea' ).val();
+						var summary = $( '#spriteedit-summary' ).val();
 						idsTable = conflictPanel.$text.find( 'textarea:first' ).val();
 						saveChanges( summary, idsTable, true );
 					}
@@ -1740,7 +1778,7 @@ var create = function( state ) {
 			$text: $text,
 			$actions: $actions,
 			show: function( callback ) {
-				$dialog.css( { width: '', height: '' } );
+				$dialog.css( { width: '', height: '', transform: 'none', transition: 'none' } );
 				
 				var prevPanel;
 				if ( $overlay.css( 'opacity' ) === '1' ) {
@@ -1759,6 +1797,7 @@ var create = function( state ) {
 				$overlay.css( 'display', '' );
 				$panel.css( 'display', '' );
 				var newRect = $dialog[0].getBoundingClientRect();
+				$dialog.css( 'transform', '' ).redraw().css( 'transition', '' );
 				
 				$dialog.transitionEnd( function() {
 					if ( onShow ) {
@@ -1784,11 +1823,10 @@ var create = function( state ) {
 							width: oldRect.width,
 							height: oldRect.height
 						} );
-						setImmediate( function() {
-							$dialog.css( {
-								width: newRect.width,
-								height: newRect.height
-							} );
+						$dialog.redraw();
+						$dialog.css( {
+							width: newRect.width,
+							height: newRect.height
 						} );
 						
 						$dialog.transitionEnd( function() {
@@ -1807,15 +1845,17 @@ var create = function( state ) {
 						}, 1000 );
 					}
 				} else {
-					setImmediate( function() {
-						$overlay.css( 'opacity', 1 );
-						$dialog
-							.addClass( 'spriteedit-elastic' )
-							.css( 'transform', 'scale(1)' )
-							.transitionEnd( function() {
-								$dialog.removeClass( 'spriteedit-elastic' );
-							} );
-					} );
+					$overlay.css( 'opacity', 1 );
+					$dialog
+						.addClass( 'spriteedit-elastic' )
+						.css( {
+							transform: 'scale(1)',
+							width: newRect.width,
+							height: newRect.height
+						} )
+						.transitionEnd( function() {
+							$dialog.removeClass( 'spriteedit-elastic' );
+						} );
 				}
 				
 				$dialog.data( 'active-panel', id );
@@ -2262,7 +2302,7 @@ var create = function( state ) {
 						}
 					}
 					
-					setImmediate( function() {
+					requestAnimationFrame( function() {
 						scrollIntoView( content.$elem );
 					} );
 				break;
@@ -2317,21 +2357,29 @@ var create = function( state ) {
 				if ( !queueChange ) {
 					func.commit();
 				}
+			} else {
+				// These parsed changes are no longer up-to-date
+				idsTable = idChanges = sheetData = modified.names = null;
 			}
-			
-			// Preemptively enable the save button
-			$( '#spriteedit-save' ).prop( 'disabled', false );
 		};
 		func.commit = function() {
 			addHistory( queue );
+			// These parsed changes are no longer up-to-date
+			idsTable = idChanges = sheetData = modified.names = null;
 			
-			func.discard();
+			queue = [];
 		};
 		func.discard = function() {
 			queue = [];
 			
 			if ( !changes.length ) {
-				$( '#spriteedit-save' ).prop( 'disabled', true );
+				$.each( [
+					'#spriteedit-save',
+					'#spriteedit-summary',
+					'#spriteedit-review-button'
+				], function() {
+					$( this ).prop( 'disabled', true );
+				} );
 			}
 		};
 		
@@ -2360,7 +2408,14 @@ var create = function( state ) {
 			$( '#spriteedit-redo' ).prop( 'disabled', true );
 		}
 		
-		$( '#spriteedit-undo' ).add( '#spriteedit-save' ).prop( 'disabled', false );
+		$.each( [
+				'#spriteedit-undo',
+				'#spriteedit-save',
+				'#spriteedit-summary',
+				'#spriteedit-review-button'
+			], function() {
+				$( this ).prop( 'disabled', false );
+			} );
 	};
 	
 	/**
@@ -2430,7 +2485,14 @@ var create = function( state ) {
 		}
 		
 		if ( !changes.length ) {
-			$( '#spriteedit-undo' ).add( '#spriteedit-save' ).prop( 'disabled', true );
+			$.each( [
+				'#spriteedit-undo',
+				'#spriteedit-save',
+				'#spriteedit-summary',
+				'#spriteedit-review-button'
+			], function() {
+				$( this ).prop( 'disabled', true );
+			} );
 		}
 	};
 	
@@ -2655,6 +2717,17 @@ $.fn.transitionEnd = function( callback ) {
 };
 
 /**
+ * Forces the browser to redraw an element
+ */
+$.fn.redraw = function() {
+	this.each( function() {
+		this.offsetWidth;
+	} );
+	
+	return this;
+};
+
+/**
  * Returns the index to move an element to to sort it alphabetically, ignoring case
  *
  * "text" is the string to sort by.
@@ -2706,9 +2779,10 @@ var getAlphaIndex = function( text, $elem, $parent ) {
  */
 var scrollIntoView = function( $elem, instant ) {
 	var elemRect = $elem[0].getBoundingClientRect();
+	var toolbarHeight = $( '.spriteedit-toolbar' )[0].getBoundingClientRect().height;
 	var scrollPos;
-	if ( elemRect.top < 65 ) {
-		scrollPos = elemRect.top + $win.scrollTop() - 65;
+	if ( elemRect.top - toolbarHeight < 10 ) {
+		scrollPos = elemRect.top + $win.scrollTop() - toolbarHeight - 10;
 	} else {
 		var winHeight = $win.height() - 40;
 		if ( elemRect.height > winHeight || elemRect.bottom < winHeight ) {
@@ -2899,181 +2973,6 @@ var supports = function( prop, val ) {
 		window.cancelAnimationFrame = clearTimeout;
 	}
 }() );
-
-// setImmediate
-(function (global, undefined) {
-	if (global.setImmediate) {
-		return;
-	}
-
-	var nextHandle = 1; // Spec says greater than zero
-	var tasksByHandle = {};
-	var currentlyRunningATask = false;
-	var doc = global.document;
-	var setImmediate;
-
-	function addFromSetImmediateArguments(args) {
-		tasksByHandle[nextHandle] = partiallyApplied.apply(undefined, args);
-		return nextHandle++;
-	}
-
-	// This function accepts the same arguments as setImmediate, but
-	// returns a function that requires no arguments.
-	function partiallyApplied(handler) {
-		var args = [].slice.call(arguments, 1);
-		return function() {
-			if (typeof handler === "function") {
-				handler.apply(undefined, args);
-			} else {
-				(new Function("" + handler))();
-			}
-		};
-	}
-
-	function runIfPresent(handle) {
-		// From the spec: "Wait until any invocations of this algorithm started before this one have completed."
-		// So if we're currently running a task, we'll need to delay this invocation.
-		if (currentlyRunningATask) {
-			// Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
-			// "too much recursion" error.
-			setTimeout(partiallyApplied(runIfPresent, handle), 0);
-		} else {
-			var task = tasksByHandle[handle];
-			if (task) {
-				currentlyRunningATask = true;
-				try {
-					task();
-				} finally {
-					clearImmediate(handle);
-					currentlyRunningATask = false;
-				}
-			}
-		}
-	}
-
-	function clearImmediate(handle) {
-		delete tasksByHandle[handle];
-	}
-
-	function installNextTickImplementation() {
-		setImmediate = function() {
-			var handle = addFromSetImmediateArguments(arguments);
-			process.nextTick(partiallyApplied(runIfPresent, handle));
-			return handle;
-		};
-	}
-
-	function canUsePostMessage() {
-		// The test against `importScripts` prevents this implementation from being installed inside a web worker,
-		// where `global.postMessage` means something completely different and can't be used for this purpose.
-		if (global.postMessage && !global.importScripts) {
-			var postMessageIsAsynchronous = true;
-			var oldOnMessage = global.onmessage;
-			global.onmessage = function() {
-				postMessageIsAsynchronous = false;
-			};
-			global.postMessage("", "*");
-			global.onmessage = oldOnMessage;
-			return postMessageIsAsynchronous;
-		}
-	}
-
-	function installPostMessageImplementation() {
-		// Installs an event handler on `global` for the `message` event: see
-		// * https://developer.mozilla.org/en/DOM/window.postMessage
-		// * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
-
-		var messagePrefix = "setImmediate$" + Math.random() + "$";
-		var onGlobalMessage = function(event) {
-			if (event.source === global &&
-				typeof event.data === "string" &&
-				event.data.indexOf(messagePrefix) === 0) {
-				runIfPresent(+event.data.slice(messagePrefix.length));
-			}
-		};
-
-		if (global.addEventListener) {
-			global.addEventListener("message", onGlobalMessage, false);
-		} else {
-			global.attachEvent("onmessage", onGlobalMessage);
-		}
-
-		setImmediate = function() {
-			var handle = addFromSetImmediateArguments(arguments);
-			global.postMessage(messagePrefix + handle, "*");
-			return handle;
-		};
-	}
-
-	function installMessageChannelImplementation() {
-		var channel = new MessageChannel();
-		channel.port1.onmessage = function(event) {
-			var handle = event.data;
-			runIfPresent(handle);
-		};
-
-		setImmediate = function() {
-			var handle = addFromSetImmediateArguments(arguments);
-			channel.port2.postMessage(handle);
-			return handle;
-		};
-	}
-
-	function installReadyStateChangeImplementation() {
-		var html = doc.documentElement;
-		setImmediate = function() {
-			var handle = addFromSetImmediateArguments(arguments);
-			// Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
-			// into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
-			var script = doc.createElement("script");
-			script.onreadystatechange = function () {
-				runIfPresent(handle);
-				script.onreadystatechange = null;
-				html.removeChild(script);
-				script = null;
-			};
-			html.appendChild(script);
-			return handle;
-		};
-	}
-
-	function installSetTimeoutImplementation() {
-		setImmediate = function() {
-			var handle = addFromSetImmediateArguments(arguments);
-			setTimeout(partiallyApplied(runIfPresent, handle), 0);
-			return handle;
-		};
-	}
-
-	// If supported, we should attach to the prototype of global, since that is where setTimeout et al. live.
-	var attachTo = Object.getPrototypeOf && Object.getPrototypeOf(global);
-	attachTo = attachTo && attachTo.setTimeout ? attachTo : global;
-
-	// Don't get fooled by e.g. browserify environments.
-	if ({}.toString.call(global.process) === "[object process]") {
-		// For Node.js before 0.9
-		installNextTickImplementation();
-
-	} else if (canUsePostMessage()) {
-		// For non-IE10 modern browsers
-		installPostMessageImplementation();
-
-	} else if (global.MessageChannel) {
-		// For web workers, where supported
-		installMessageChannelImplementation();
-
-	} else if (doc && "onreadystatechange" in doc.createElement("script")) {
-		// For IE 6–8
-		installReadyStateChangeImplementation();
-
-	} else {
-		// For older browsers
-		installSetTimeoutImplementation();
-	}
-
-	attachTo.setImmediate = setImmediate;
-	attachTo.clearImmediate = clearImmediate;
-}(window));
 
 // Add width and height to Element.getBoundingClientRect() in IE < 8
 if ( window.TextRectangle && !TextRectangle.prototype.width ) {
