@@ -8,11 +8,18 @@
  */
 if ( $( '#spritedoc' ).length ) {
 	mw.loader.using( 'mediawiki.util', function() {
-		var $spriteEditTab = $( '#ca-edit' ).clone().attr( 'id', 'ca-spriteedit' )
-		var $spriteEditLink = $spriteEditTab.find( 'a' );
-		$spriteEditLink.text( 'Edit sprite' ).attr( 'href', mw.util.getUrl( null, { spriteaction: 'edit' } ) )
-		$spriteEditTab.insertAfter( '#ca-edit' );
-
+		var $editTab = $( '#ca-edit' );
+		if ( !$editTab.length ) {
+			$editTab = $( '#ca-viewsource' );
+		}
+		var $spriteEditLink = $( '<a>' ).text( 'Edit sprite' ).attr( 'href',
+			mw.util.getUrl( null, { spriteaction: 'edit' } )
+		);
+		var $spriteEditTab = $( '<li>' ).attr( 'id', 'ca-spriteedit' ).append(
+			$( '<span>' ).append( $spriteEditLink )
+		);
+		$spriteEditTab.insertAfter( $editTab );
+		
 		var loadSpriteEditor = function() {
 			$spriteEditTab.add( '#ca-view' ).toggleClass( 'selected' );
 			
