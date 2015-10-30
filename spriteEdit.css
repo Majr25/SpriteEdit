@@ -6,15 +6,15 @@
 	display: none;
 }
 
-html.spriteedit-enabled {
+.spriteedit-enabled {
 	overflow-y: scroll;
 }
 
-html.spriteedit-smoothscroll {
+.spriteedit-smoothscroll {
 	scroll-behavior: smooth;
 }
 
-html.spriteedit-sorting * {
+.spriteedit-sorting * {
 	cursor: move !important;
 	cursor: -webkit-grabbing !important;
 	cursor: -moz-grabbing !important;
@@ -23,6 +23,29 @@ html.spriteedit-sorting * {
 
 .spriteedit-elastic {
 	transition-timing-function: cubic-bezier(0.46, 0, 0.19, 1.44) !important;
+}
+
+.spriteedit-droptarget {
+	outline: 1px dashed #000;
+}
+
+.spriteedit-autoscroll {
+	visibility: hidden;
+	position: fixed;
+	left: 0;
+	right: 0;
+	height: 50px;
+	z-index: 999;
+}
+.spriteedit-autoscroll-up {
+	top: 0;
+}
+.spriteedit-autoscroll-down {
+	bottom: 0;
+}
+.spriteedit-sorting .spriteedit-autoscroll,
+.spriteedit-dragging .spriteedit-autoscroll {
+	visibility: visible;
 }
 
 .spriteedit-toolbar-container {
@@ -80,12 +103,6 @@ html.spriteedit-sorting * {
 	-webkit-flex: none;
 	-ms-flex: none;
 	flex: none;
-}
-
-/* Hover doesn't work while dragging, so this will just have to
- * always be shown */
-.spriteedit-dragging .spritedoc-section {
-	outline: 1px dashed #000;
 }
 
 .spritedoc-box:hover {

@@ -107,7 +107,7 @@ var create = function( state ) {
 	
 	// Pre-load modules which will be needed later
 	// TODO: Change to "mediawiki.ui.input" on MW1.25 update
-	mw.loader.load( [ 'mediawiki.ui', 'mediawiki.action.history.diff' ] );
+	mw.loader.load( [ 'jquery.byteLimit', 'mediawiki.action.history.diff', 'mediawiki.ui' ] );
 	
 	$root.addClass( 'spriteedit-loaded' );
 	
@@ -312,6 +312,63 @@ var create = function( state ) {
 		$doc.detach();
 		
 		$doc.find( '#toc' ).remove();
+		
+		
+		$doc.append(
+			$( '<div>' ).addClass( 'spriteedit-autoscroll spriteedit-autoscroll-up' ),
+			$( '<div>' ).addClass( 'spriteedit-autoscroll spriteedit-autoscroll-down' )
+		);
+		var autoScroll = function( now ) {
+			autoScroll.delta = ( now - autoScroll.timeLast ) / ( 1000 / 60 );
+			autoScroll.timeLast = now;
+			
+			if ( mouse.y !== autoScroll.lastMouseY ) {
+				var areaRect = autoScroll.area.getBoundingClientRect();
+				if ( autoScroll.dir === -1 ) {
+					autoScroll.speed = areaRect.bottom - mouse.y;
+				} else {
+					autoScroll.speed = mouse.y - areaRect.top + 1;
+				}
+				
+				autoScroll.lastMouseY = mouse.y;
+			}
+			
+			// Prevent overscroll
+			var scrollTop = $win.scrollTop();
+			if (
+				autoScroll.dir === -1 && scrollTop > autoScroll.topLimit ||
+				autoScroll.dir === 1 && scrollTop + $win.height() < autoScroll.bottomLimit
+			) {
+				scrollBy( 0, autoScroll.dir * Math.round( autoScroll.speed / 2 ) * Math.round( autoScroll.delta ) );
+			}
+			
+			autoScroll.id = requestAnimationFrame( autoScroll );
+		};
+		autoScroll.start = function( area ) {
+			if ( autoScroll.id ) {
+				autoScroll.stop();
+			}
+			
+			var scrollTop = $win.scrollTop();
+			autoScroll.area = area;
+			autoScroll.dir = $( area ).hasClass( 'spriteedit-autoscroll-up' ) ? -1 : 1;
+			autoScroll.speed = 1;
+			autoScroll.timeLast = window.performance ? performance.now() : Date.now();
+			autoScroll.topLimit = scrollTop + $doc[0].getBoundingClientRect().top;
+			autoScroll.bottomLimit = scrollTop + $doc.find( '.spritedoc-section' ).last()[0].getBoundingClientRect().bottom + 50;
+			autoScroll.id = requestAnimationFrame( autoScroll );
+		};
+		autoScroll.stop = function() {
+			cancelAnimationFrame( autoScroll.id );
+			autoScroll.id = 0;
+		};
+		
+		$doc.find( '.spriteedit-autoscroll' )
+			.on( 'mouseenter.spriteEdit dragenter.spriteEdit', function() {
+				autoScroll.start( this );
+			} )
+			.on( 'mouseleave.spriteEdit dragleave.spriteEdit', autoScroll.stop );
+		
 		
 		addControls( $doc.find( 'h3' ), 'heading' );
 		
@@ -641,31 +698,80 @@ var create = function( state ) {
 		// Drag and drop functionality
 		if ( dropSupported && imageEditingSupported ) {
 			var dragTimeout, dragEnded;
-			var endDrop = function() {
+			var endDrag = function() {
 				$root.removeClass( 'spriteedit-dragging' );
 				
 				clearTimeout( dragTimeout );
+				clearTimeout( dropTimeout );
 				dragEnded = false;
+				dropEnded = false;
 			};
-			$win.on( 'dragenter.spriteEdit dragover.spriteEdit', function( e ) {
-				$root.addClass( 'spriteedit-dragging' );
+			var isFile = function( e ) {
+				var types = e.originalEvent.dataTransfer.types;
+				return types.indexOf ?
+					types.indexOf( 'Files' ) > -1 || types.indexOf( 'application/x-moz-file' ) > -1 :
+					types.contains( 'Files' );
+			};
+			$win.on( 'dragenter.spriteEdit', function( e ) {
+				if ( !isFile( e ) ) {
+					return;
+				}
 				
+				$root.addClass( 'spriteedit-dragging' );
+			} ).on( 'dragover.spriteEdit', function( e ) {
 				clearTimeout( dragTimeout );
 				dragEnded = false;
-				e.preventDefault();
-			} ).on( 'dragleave.spriteEdit', function() {
+			} ).on( 'dragleave.spriteEdit', function( e ) {
+				if ( !isFile( e ) ) {
+					return;
+				}
+				
 				clearTimeout( dragTimeout );
 				dragEnded = true;
 				dragTimeout = setTimeout( function() {
 					if ( dragEnded ) {
-						endDrop();
+						endDrag();
 					}
-				}, 1 );
-			} ).on( 'dragend', endDrop );
+				}, 100 );
+			} );
 			
-			$doc.on( 'drop.spriteEdit', '.spritedoc-section', function( e ) {
+			var dropTimeout, dropEnded;
+			$doc.on( 'dragenter.spriteEdit', '.spritedoc-section', function( e ) {
+				if ( !isFile( e ) ) {
+					return;
+				}
+				
+				$doc.find( '.spriteedit-droptarget' ).not( this ).removeClass( 'spriteedit-droptarget' );
+				$( this ).addClass( 'spriteedit-droptarget' );
+			} ).on( 'dragover.spriteEdit', '.spritedoc-section', function( e ) {
+				clearTimeout( dropTimeout );
+				dropEnded = false;
+				
+				e.originalEvent.dataTransfer.dropEffect = 'copy';
+				
+				e.preventDefault();
+			} ).on( 'dragleave.spriteEdit', '.spritedoc-section', function( e ) {
+				if ( !isFile( e ) ) {
+					return;
+				}
+				
+				clearTimeout( dropTimeout );
+				dropEnded = true;
+				dropTimeout = setTimeout( function() {
+					if ( dropEnded ) {
+						$doc.find( '.spriteedit-droptarget' ).removeClass( 'spriteedit-droptarget' );
+						dropEnded = false;
+					}
+				}, 100 );
+			} ).on( 'drop.spriteEdit', '.spritedoc-section', function( e ) {
+				if ( !isFile( e ) ) {
+					return;
+				}
+				
+				$doc.find( '.spriteedit-droptarget' ).removeClass( 'spriteedit-droptarget' );
+				
 				insertSprites( e.originalEvent.dataTransfer.files, this );
-				endDrop();
+				endDrag();
 				e.preventDefault();
 			} );
 		}
@@ -684,14 +790,14 @@ var create = function( state ) {
 				return;
 			}
 			
+			// Prevent saving if button already pressed and still processing
+			if ( $button.hasClass( 'spriteedit-processing' ) ) {
+				return;
+			}
+			
+			$button.addClass( 'spriteedit-processing' );
+			
 			if ( $toolbar.hasClass( 'spriteedit-saveform-open' ) ) {
-				// Prevent saving if button already pressed
-				if ( $button.hasClass( 'spriteedit-processing' ) ) {
-					return;
-				}
-				
-				$button.addClass( 'spriteedit-processing' );
-				
 				if ( !idsTable ) {
 					parseNameChanges();
 				}
@@ -713,39 +819,45 @@ var create = function( state ) {
 				return;
 			}
 			
-			$toolbar.addClass( 'spriteedit-saveform-open' );
-			$button.addClass( 'mw-ui-constructive' ).removeClass( 'mw-ui-progressive' );
-			
-			if ( !$toolbar.find( '#spriteedit-saveform' ).length ) {
-				$( '<div>' )
-					.attr( 'id', 'spriteedit-saveform' )
-					.css( 'margin-right', $( '#spriteedit-save' )[0].getBoundingClientRect().width )
-					.append(
-						$( '<input type="text">' ).addClass( 'mw-ui-input' ).attr( {
-							id: 'spriteedit-summary',
-							name: 'wpSummary', // For autocomplete
-							placeholder: 'Summarize the changes you made',
-							maxlength: 255,
-							spellcheck: true
-						} ),
-						makeButton( 'Review changes', { id: 'spriteedit-review-button' } )
-				).appendTo( $toolbar );
-			}
-			
-			var openedToolbarHeight = $toolbar[0].getBoundingClientRect().height;
-			$toolbar
-				.outerHeight( toolbarHeight )
-				.redraw()
-				.outerHeight( openedToolbarHeight )
-				.transitionEnd( function() {
-					$barContainer.height( openedToolbarHeight );
-					$( '#spriteedit-summary' ).focus();
-					
-					// Do this after the transition so there is no stutter
-					if ( !idsTable ) {
-						parseNameChanges( true );
-					}
-				} );
+			mw.loader.using( [ 'jquery.byteLimit', 'mediawiki.ui' ], function() {
+				$toolbar.addClass( 'spriteedit-saveform-open' );
+				$button
+					.addClass( 'mw-ui-constructive' )
+					.removeClass( 'mw-ui-progressive spriteedit-processing' )
+					// Prevent accidental double-click saving
+					.css( 'pointer-events', 'none' );
+				
+				if ( !$toolbar.find( '#spriteedit-saveform' ).length ) {
+					$( '<div>' )
+						.attr( 'id', 'spriteedit-saveform' )
+						.css( 'margin-right', $( '#spriteedit-save' )[0].getBoundingClientRect().width )
+						.append(
+							$( '<input type="text">' ).addClass( 'mw-ui-input' ).attr( {
+								id: 'spriteedit-summary',
+								name: 'wpSummary', // For autocomplete
+								placeholder: 'Summarize the changes you made',
+								spellcheck: true
+							} ).byteLimit( 255 ),
+							makeButton( 'Review changes', { id: 'spriteedit-review-button' } )
+					).appendTo( $toolbar );
+				}
+				
+				var openedToolbarHeight = $toolbar[0].getBoundingClientRect().height;
+				$toolbar
+					.outerHeight( toolbarHeight )
+					.redraw()
+					.outerHeight( openedToolbarHeight )
+					.transitionEnd( function() {
+						$button.css( 'pointer-events', '' );
+						$barContainer.height( openedToolbarHeight );
+						$( '#spriteedit-summary' ).focus();
+						
+						// Do this after the transition so there is no stutter
+						if ( !idsTable ) {
+							parseNameChanges( true );
+						}
+					} );
+			} );
 		} );
 		
 		$doc.on( 'keydown.spriteEdit', '#spriteedit-summary', function( e ) {
@@ -766,10 +878,6 @@ var create = function( state ) {
 			}
 			$button.blur().addClass( 'spriteedit-processing' );
 			
-			if ( !idsTable ) {
-				parseNameChanges( true );
-			}
-			
 			var changesPanel = panels.changes || panel(
 				'changes',
 				'Review your changes',
@@ -787,6 +895,10 @@ var create = function( state ) {
 				return;
 			}
 			
+			if ( !idsTable ) {
+				parseNameChanges( true );
+			}
+			
 			if ( modified.sheet ) {
 				var sheetChanges = $.Deferred();
 				var newSpritesheet = new Image();
@@ -801,7 +913,11 @@ var create = function( state ) {
 				} );
 			}
 			
-			$.when( sheetChanges, idChanges ).done( function( newSpritesheet, diff ) {
+			$.when(
+				sheetChanges,
+				idChanges,
+				mw.loader.using( 'mediawiki.action.history.diff' )
+			).done( function( newSpritesheet, diff ) {
 				if ( !newSpritesheet && !diff ) {
 					$changesText.text( 'No changes from current revision.' );
 				} else {
@@ -865,7 +981,7 @@ var create = function( state ) {
 		$doc.on( 'blur.spriteEdit', '[contenteditable]', function() {
 			var $this = $( this );
 			var text = $this.text();
-			var trimmedText = $.trim( text );
+			var trimmedText = $.trim( text ).replace( /  +/g, ' ' );
 			var origText = $this.attr( 'data-original-text' );
 			$this.removeAttr( 'data-original-text' ).off( 'keypress.spriteEdit' );
 			
@@ -956,6 +1072,60 @@ var create = function( state ) {
 				e.preventDefault();
 			}
 		} );
+		// Make pastes plain text
+		$doc.on( 'paste.spriteEdit', '[contenteditable]', function() {
+			var $this = $( this );
+			var hasFocus = $this.has( ':focus' );
+			if ( !hasFocus ) {
+				$this.focus();
+			}
+			setTimeout( function() {
+				var text = $this.text().replace( /\n/g, ' ' );
+				if ( $this.html() !== $( '<i>' ).text( text ).html() ) {
+					$this.text( text );
+					
+					if ( !hasFocus ) {
+						$this.blur();
+					}
+				}
+			}, 0 );
+		} );
+		var isText = function( e ) {
+			var types = e.originalEvent.dataTransfer.types;
+			return types.indexOf ? types.indexOf( 'text/plain' ) > -1 : types.contains( 'text/plain' );
+		};
+		$doc.on( 'dragenter.spriteEdit dragover.spriteEdit', '[contenteditable]', function( e ) {
+			if ( !isText( e ) ) {
+				return;
+			}
+			
+			e.preventDefault();
+		} );
+		$doc.on( 'drop.spriteEdit', function( e ) {
+			// Prevent default drop on anything but contenteditable
+			// This prevents browsers dropping content into a nearby contenteditable, which doesn't
+			// trigger any kind of drop event on the contenteditable (because you didn't actually
+			// drop anything directly on it), thus making it impossible to handle it properly.
+			if ( !$( e.target ).is( '[contenteditable]' ) ) {
+				e.preventDefault();
+				return;
+			}
+			
+			if ( !isText( e ) ) {
+				return;
+			}
+			
+			var $this = $( e.target );
+			$this.focus();
+			setTimeout( function() {
+				var text = $this.text().replace( /\n/g, ' ' );
+				if ( $this.html() !== $( '<i>' ).text( text ).html() ) {
+					$this.text( text );
+				}
+				
+				$this.blur();
+			}, 0 );
+		} );
 		
 		if ( imageEditingSupported ) {
 			$doc.on( 'click.spriteEdit', '.spritedoc-image', function() {
@@ -1025,7 +1195,7 @@ var create = function( state ) {
 			mouse.x = e.clientX;
 			mouse.y = e.clientY;
 		};
-		// Only update mouse while sorting or while over a handle
+		// Only update mouse while sorting, dragging, or while over a handle
 		$doc.on( 'mouseenter.spriteEdit mousemove.spriteEdit', '.spriteedit-handle', function( e ) {
 			if ( !sorting ) {
 				updateMouse( e );
@@ -1035,6 +1205,8 @@ var create = function( state ) {
 			if ( sorting ) {
 				updateMouse( e );
 			}
+		} ).on( 'dragover.spriteEdit', function( e ) {
+			updateMouse( e.originalEvent );
 		} );
 		
 		// Disable smooth scrolling once scrolling ends so it does not interfere with user scrolling.
@@ -1166,7 +1338,7 @@ var create = function( state ) {
 		$sections.each( function() {
 			var $section = $( this );
 			var sectionId = $section.data( 'section-id' ) || getSectionId();
-			var sectionName = $section.find( '.mw-headline' ).text();
+			var sectionName = $section.find( '.mw-headline' ).text().replace( /\s+/g, ' ' );
 			headingRows.push(
 				'{ ' + luaStringQuote( sectionName ) + ', id = ' + sectionId + ' },'
 			);
@@ -1179,7 +1351,7 @@ var create = function( state ) {
 				}
 				$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 					var $this = $( this );
-					var id = $this.text();
+					var id = $this.text().replace( /\s+/g, ' ' );
 					ids.push( {
 						sortKey: id.toLowerCase(),
 						id: id,
