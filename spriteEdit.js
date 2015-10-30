@@ -2,6 +2,55 @@
 'use strict';
 
 /** "Global" vars (preserved between editing sessions) **/
+var i18n = {
+	blockedNotice: 'You cannot edit this sprite as you are blocked.',
+	blockedReason: 'Reason:',
+	browserActionNotSupported: 'Not supported by your browser.',
+	changesSavedNotice: 'Your changes were saved.',
+	controlNewName: 'New name',
+	ctxDeleteImage: 'Delete image',
+	ctxReplaceImage: 'Replace image',
+	diffError: 'Failed to retrieve diff',
+	diffErrorMissingPage: 'Failed to retrieve page',
+	dupeName: 'This name already exists.',
+	dupeNamesNotice: 'There are duplicate names which must be resolved prior to saving.',
+	genericError: 'Something went wrong',
+	namePlaceholder: 'Type a name',
+	noPermissionNotice: 'You do not have permission to edit this sprite.',
+	panelChangesIdTitle: 'ID changes',
+	panelChangesNoDiffFromCur: 'No changes from current revision.',
+	panelChangesSheetTitle: 'Spritesheet changes',
+	panelChangesTitle: 'Review your changes',
+	panelCloseTip: 'Close',
+	panelConflictCurText: 'Current text',
+	panelConflictReview: 'Review changes',
+	panelConflictSave: 'Save',
+	panelConflictText: 'An edit conflict has occurred, and was not able to be resolved automatically.',
+	panelConflictTitle: 'Edit conflict',
+	panelConflictYourText: 'Your text',
+	panelDiscardContinue: 'Keep editing',
+	panelDiscardDiscard: 'Discard changes',
+	panelDiscardText: 'Are you sure you wish to discard your changes?',
+	panelDiscardTitle: 'Unsaved changes',
+	panelEcchangesReturn: 'Return to edit conflict form',
+	panelEcchangesTitle: 'Review your manual changes',
+	panelErrorApi: 'API error:',
+	panelErrorConnection: 'Connection error',
+	panelErrorHttp: 'HTTP error:',
+	panelErrorTitle: 'Error',
+	sectionPlaceholder: 'Type a section name',
+	sectionUncategorized: 'Uncategorized',
+	toolbarNewImage: 'New image',
+	toolbarNewSection: 'New section',
+	toolbarRedo: 'Redo',
+	toolbarReviewChanges: 'Review changes',
+	toolbarSave: 'Save',
+	toolbarSummaryPlaceholder: 'Summarize the changes you made',
+	toolbarToolDeprecate: 'Deprecate',
+	toolbarToolDeprecateTip: 'Toggle names as deprecated',
+	toolbarTools: 'Tools',
+	toolbarUndo: 'Undo'
+};
 var $root = $( document.documentElement );
 var $win = $( window );
 var $doc = $( '#spritedoc' );
@@ -94,7 +143,7 @@ var create = function( state ) {
 	var $headingTemplate = $( '<h3>' ).html(
 		$( '<span>' )
 			.addClass( 'mw-headline spriteedit-new' )
-			.attr( 'data-placeholder', 'Type a section name' )
+			.attr( 'data-placeholder', i18n.sectionPlaceholder )
 	);
 	var $boxTemplate = $( '<li>' ).addClass( 'spritedoc-box spriteedit-new' ).append(
 		$( '<div>' ).addClass( 'spritedoc-image' ),
@@ -222,13 +271,13 @@ var create = function( state ) {
 		var canEdit = true;
 		if ( info.blockid ) {
 			canEdit = false;
-			var $blockNotice = $( '<p>' ).text( 'You cannot edit this sprite as you are blocked.' );
+			var $blockNotice = $( '<p>' ).text( i18n.blockedNotice );
 			var reasonParsed;
 			if ( info.blockreason ) {
 				reasonParsed = parseApi.get( {
 					summary: info.blockreason
 				} ).done( function( data ) {
-					$blockNotice.append( '<br>', 'Reason: ',
+					$blockNotice.append( '<br>', i18n.blockedReason, ' ',
 						$( '<span>' ).addClass( 'comment' ).html( data.parse.parsedsummary['*'] )
 					);
 				} );
@@ -253,7 +302,7 @@ var create = function( state ) {
 			} );
 			
 			if ( !canEdit ) {
-				mw.notify( 'You do not have permission to edit this sprite.', { autoHide: false } );
+				mw.notify( i18n.noPermissionNotice, { autoHide: false } );
 			}
 		}
 		
@@ -493,7 +542,7 @@ var create = function( state ) {
 		} );
 		$toolbar.append(
 			$( '<span>' ).addClass( 'mw-ui-button-group' ).append(
-				makeButton( 'Undo', {
+				makeButton( i18n.toolbarUndo, {
 					id: 'spriteedit-undo',
 					props: { disabled: true },
 					action: function() {
@@ -505,7 +554,7 @@ var create = function( state ) {
 						$( '#spriteedit-redo' ).prop( 'disabled', false );
 					}
 				} ),
-				makeButton( 'Redo', {
+				makeButton( i18n.toolbarRedo, {
 					id: 'spriteedit-redo',
 					props: { disabled: true },
 					action: function() {
@@ -533,17 +582,17 @@ var create = function( state ) {
 				} )
 			),
 			$( '<span>' ).addClass( 'mw-ui-button-group' ).append(
-				makeButton( 'New section', { id: 'spriteedit-add-section' } ),
-				makeButton( 'New image', { id: 'spriteedit-add-image' } )
+				makeButton( i18n.toolbarNewSection, { id: 'spriteedit-add-section' } ),
+				makeButton( i18n.toolbarNewImage, { id: 'spriteedit-add-image' } )
 			),
 			$( '<select>' ).prop( 'id', 'spriteedit-toolbox' ).addClass( 'mw-ui-button' ).append(
 				$( '<option>' ).prop( {
 					disabled: true,
 					selected: true,
 					value: ''
-				} ).css( 'display', 'none' ).text( 'Tools' )
+				} ).css( 'display', 'none' ).text( i18n.toolbarTools )
 			),
-			makeButton( 'Save', {
+			makeButton( i18n.toolbarSave, {
 				id: 'spriteedit-save',
 				type: 'progressive',
 				props: { disabled: true },
@@ -553,7 +602,7 @@ var create = function( state ) {
 		if ( !imageEditingSupported ) {
 			$toolbar.find( '#spriteedit-add-image' ).prop( {
 				disabled: true,
-				title: 'Not supported by your browser.'
+				title: i18n.browserActionNotSupported
 			} ).css( 'cursor', 'help' );
 		}
 		
@@ -562,8 +611,8 @@ var create = function( state ) {
 		$toolbox.append(
 			$( '<option>' ).prop( {
 				value: 'deprecate',
-				title: 'Toggle names as deprecated'
-			} ).text( 'Deprecate' )
+				title: i18n.toolabrToolDeprecateTip
+			} ).text( i18n.toolbarToolDeprecate )
 		);
 		
 		var $barContainer = $( '<div>' ).addClass( 'spriteedit-toolbar-container' )
@@ -718,7 +767,7 @@ var create = function( state ) {
 				}
 				
 				$root.addClass( 'spriteedit-dragging' );
-			} ).on( 'dragover.spriteEdit', function( e ) {
+			} ).on( 'dragover.spriteEdit', function() {
 				clearTimeout( dragTimeout );
 				dragEnded = false;
 			} ).on( 'dragleave.spriteEdit', function( e ) {
@@ -782,10 +831,7 @@ var create = function( state ) {
 			
 			// Prevent saving and notify if there are duplicate names
 			if ( $doc.find( '.spriteedit-dupe' ).length ) {
-				mw.notify(
-					'There are duplicate names which must be resolved prior to saving.',
-					{ autoHide: false }
-				);
+				mw.notify( i18n.dupeNamesNotice, { autoHide: false } );
 				
 				return;
 			}
@@ -835,10 +881,10 @@ var create = function( state ) {
 							$( '<input type="text">' ).addClass( 'mw-ui-input' ).attr( {
 								id: 'spriteedit-summary',
 								name: 'wpSummary', // For autocomplete
-								placeholder: 'Summarize the changes you made',
+								placeholder: i18n.toolbarSummaryPlaceholder,
 								spellcheck: true
 							} ).byteLimit( 255 ),
-							makeButton( 'Review changes', { id: 'spriteedit-review-button' } )
+							makeButton( i18n.toolbarReviewChanges, { id: 'spriteedit-review-button' } )
 					).appendTo( $toolbar );
 				}
 				
@@ -880,7 +926,7 @@ var create = function( state ) {
 			
 			var changesPanel = panels.changes || panel(
 				'changes',
-				'Review your changes',
+				i18n.panelChangesTitle,
 				[
 					$( '<div>' ).addClass( 'spriteedit-sheet-changes' ),
 					$( '<div>' ).addClass( 'spriteedit-id-changes' )
@@ -919,11 +965,11 @@ var create = function( state ) {
 				mw.loader.using( 'mediawiki.action.history.diff' )
 			).done( function( newSpritesheet, diff ) {
 				if ( !newSpritesheet && !diff ) {
-					$changesText.text( 'No changes from current revision.' );
+					$changesText.text( i18n.panelChangesNoDiffFromCur );
 				} else {
 					if ( newSpritesheet ) {
 						$changesText.find( '.spriteedit-sheet-changes' ).append(
-							$( '<div>' ).text( 'Spritesheet changes' ),
+							$( '<div>' ).text( i18n.panelChangesSheetTitle ),
 							$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
 								$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
 								$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
@@ -932,7 +978,7 @@ var create = function( state ) {
 					}
 					if ( diff ) {
 						$changesText.find( '.spriteedit-id-changes' ).append(
-							$( '<div>' ).text( 'ID changes' ),
+							$( '<div>' ).text( i18n.panelChangesIdTitle ),
 							$( '<div>' ).append( diff )
 						);
 					}
@@ -949,7 +995,7 @@ var create = function( state ) {
 			var $names = $( this ).closest( '.spritedoc-box' ).find( '.spritedoc-name' );
 			var $item = $( '<li>' ).addClass( 'spritedoc-name' );
 			var $name = $( '<code>' ).addClass( 'spriteedit-new' )
-				.attr( 'data-placeholder', 'Type a name' );
+				.attr( 'data-placeholder', i18n.namePlaceholder );
 			addControls( $item.append( $name ), 'name' );
 			
 			change( 'insert', {
@@ -997,7 +1043,7 @@ var create = function( state ) {
 						change( 'text', {
 							$elem: $this,
 							oldText: origText,
-							text: 'Uncategorized'
+							text: i18n.sectionUncategorized
 						} );
 						return;
 					} else {
@@ -1051,7 +1097,7 @@ var create = function( state ) {
 				// Wait until after edit change, as it may move the element
 				// which the tooltip should be anchored to
 				requestAnimationFrame( function() {
-					tooltip( $this, 'This name already exists.' );
+					tooltip( $this, i18n.dupeName );
 				} );
 			}
 			
@@ -1132,7 +1178,7 @@ var create = function( state ) {
 				var $parent = $( this );
 				
 				tooltip( $parent, [
-					makeButton( 'Replace image', {
+					makeButton( i18n.ctxReplaceImage, {
 						type: 'progressive',
 						css: {
 							display: 'block',
@@ -1156,7 +1202,7 @@ var create = function( state ) {
 								} ).click();
 						}
 					} ),
-					makeButton( 'Delete image', {
+					makeButton( i18n.ctxDeleteImage, {
 						type: 'destructive',
 						css: {
 							display: 'block',
@@ -1237,15 +1283,15 @@ var create = function( state ) {
 		} else {
 			var discardPanel = panels.discard || panel(
 				'discard',
-				'Unsaved changes',
-				$( '<p>' ).text( 'Are you sure you wish to discard your changes?' ),
+				i18n.panelDiscardTitle,
+				$( '<p>' ).text( i18n.panelDiscardText ),
 				{ right: [
-					{ text: 'Keep editing', config: {
+					{ text: i18n.panelDiscardContinue, config: {
 						action: function() {
 							discardPanel.hide();
 						}
 					} },
-					{ text: 'Discard changes', config: {
+					{ text: i18n.panelDiscardDiscard, config: {
 						type: 'destructive',
 						action: function() {
 							discardPanel.hide( function() {
@@ -1268,17 +1314,17 @@ var create = function( state ) {
 	 */
 	var makeDiff = function( data ) {
 		if ( !data || !data.query || !data.query.pages ) {
-			return 'Something went wrong';
+			return i18n.genericError;
 		}
 		
 		var pages = data.query.pages;
 		var page = pages[idsPageId];
 		if ( !page ) {
-			return 'Failed to retrieve page';
+			return i18n.diffErrorMissingPage;
 		}
 		var diff = page.revisions[0].diff['*'];
 		if ( diff === undefined ) {
-			return 'Failed to retrieve diff';
+			return i18n.diffError;
 		}
 		
 		if ( !diff.length ) {
@@ -1573,7 +1619,7 @@ var create = function( state ) {
 					
 					destroy();
 					
-					mw.hook( 'postEdit' ).fire( { message: 'Your changes were saved.' } );
+					mw.hook( 'postEdit' ).fire( { message: i18n.changesSavedNotice } );
 				} );
 			} );
 		} );
@@ -1597,12 +1643,10 @@ var create = function( state ) {
 		
 		var conflictPanel = panels.conflict || panel(
 			'conflict',
-			'Edit conflict',
-			$( '<p>' ).text(
-				'An edit conflict has occurred, and was not able to be resolved automatically.'
-			),
+			i18n.panelConflictTitle,
+			$( '<p>' ).text( i18n.panelConflictText ),
 			{
-				left: { text: 'Review changes', config: {
+				left: { text: i18n.panelConflictReview, config: {
 					id: 'review-conflict-changes',
 					action: function() {
 						if ( $( this ).hasClass( 'spriteedit-processing' ) ) {
@@ -1612,9 +1656,9 @@ var create = function( state ) {
 						
 						var changesPanel = panels.ecchanges || panel(
 							'ecchanges',
-							'Review your manual changes',
+							i18n.panelEcchangesTitle,
 							$( '<div>' ).addClass( 'spriteedit-id-changes' ),
-							{ right: { text: 'Return to edit conflict form', config: {
+							{ right: { text: i18n.panelEcchangesReturn, config: {
 								id: 'spriteedit-return-edit',
 								type: 'progressive',
 								action: function() {
@@ -1634,14 +1678,14 @@ var create = function( state ) {
 							
 							var diff = makeDiff( data );
 							if ( !diff ) {
-								diff = 'No changes from current revision.';
+								diff = i18n.panelChangesNoDiffFromCur;
 							}
 							changesPanel.$text.find( '.spriteedit-id-changes' ).append( diff );
 							changesPanel.show();
 						} ).fail( handleError );
 					}
 				} },
-				right: { text: 'Save', config: {
+				right: { text: i18n.panelConflictSave, config: {
 					id: 'save-conflict',
 					type: 'constructive',
 					action: function() {
@@ -1685,10 +1729,10 @@ var create = function( state ) {
 				var $diff = $( '<div>' ).append( makeDiff( data ) );
 				
 				conflictPanel.$text
-					.append( $( '<p>' ).text( 'Current text' ) )
+					.append( $( '<p>' ).text( i18n.panelConflictCurText ) )
 					.append( $curText )
 					.append( $diff )
-					.append( $( '<p>' ).text( 'Your text' ) )
+					.append( $( '<p>' ).text( i18n.panelConflictYourText ) )
 					.append( $oldText );
 				
 				conflictPanel.show();
@@ -1867,7 +1911,7 @@ var create = function( state ) {
 			$dialog = $( '<div>' ).addClass( 'spriteedit-dialog' ).append(
 				makeButton( '×', {
 					id: 'spriteedit-dialog-close',
-					props: { title: 'Close' },
+					props: { title: i18n.panelCloseTip },
 					action: function() {
 						panel().hide();
 					}
@@ -2759,18 +2803,18 @@ var create = function( state ) {
 	var handleError = function( code, data ) {
 		var errorPanel = panels.error || panel(
 			'error',
-			'Error'
+			i18n.panelErrorTitle
 		);
 		
 		var errorText;
 		if ( code === 'http' ) {
 			if ( data.textStatus === 'error' ) {
-				errorText = 'Connection error';
+				errorText = i18n.panelErrorConnection;
 			} else {
-				errorText = 'HTTP error: ' + data.textStatus;
+				errorText = i18n.panelErrorHttp + ' ' + data.textStatus;
 			}
 		} else {
-			errorText = 'API error: ' + data.error.info;
+			errorText = i18n.panelErrorApi + ' ' + data.error.info;
 		}
 		errorPanel.$text.text( errorText );
 		
@@ -3050,7 +3094,7 @@ var addControls = function( $elems, type ) {
 			$elems.prepend(
 				$( '<span>' ).addClass( 'spriteedit-handle' ),
 				$( '<span>' ).addClass( 'spriteedit-add-name' ).append(
-					makeButton( 'New name', { type: 'progressive' } )
+					makeButton( i18n.controlNewName, { type: 'progressive' } )
 				)
 			);
 			addControls( $elems.find( '.spritedoc-name' ), 'name' );
