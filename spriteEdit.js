@@ -4,7 +4,7 @@
 /** "Global" vars (preserved between editing sessions) **/
 var i18n = {
 	blockedNotice: 'You cannot edit this sprite as you are blocked.',
-	blockedReason: 'Reason:',
+	blockedReason: 'Reason: $1',
 	browserActionNotSupported: 'Not supported by your browser.',
 	changesSavedNotice: 'Your changes were saved.',
 	controlNewName: 'New name',
@@ -14,7 +14,18 @@ var i18n = {
 	diffErrorMissingPage: 'Failed to retrieve page',
 	dupeName: 'This name already exists.',
 	dupeNamesNotice: 'There are duplicate names which must be resolved prior to saving.',
+	errorApi: 'API error',
+	errorConnection: 'Connection error',
+	errorConnectionText: 'Check your internet connection',
+	errorGeneric: 'Error',
+	errorHttp: 'HTTP error',
 	genericError: 'Something went wrong',
+	luaKeyDeprecated: 'deprecated',
+	luaKeyId: 'id',
+	luaKeyIds: 'ids',
+	luaKeyPos: 'pos',
+	luaKeySection: 'section',
+	luaKeySections: 'sections',
 	namePlaceholder: 'Type a name',
 	noPermissionNotice: 'You do not have permission to edit this sprite.',
 	panelChangesIdTitle: 'ID changes',
@@ -34,10 +45,6 @@ var i18n = {
 	panelDiscardTitle: 'Unsaved changes',
 	panelEcchangesReturn: 'Return to edit conflict form',
 	panelEcchangesTitle: 'Review your manual changes',
-	panelErrorApi: 'API error:',
-	panelErrorConnection: 'Connection error',
-	panelErrorHttp: 'HTTP error:',
-	panelErrorTitle: 'Error',
 	sectionPlaceholder: 'Type a section name',
 	sectionUncategorized: 'Uncategorized',
 	toolbarNewImage: 'New image',
@@ -56,21 +63,13 @@ var $win = $( window );
 var $doc = $( '#spritedoc' );
 var inlineStyle;
 var URL = window.URL || window.webkitURL;
-var imageEditingSupported = ( function() {
-	if (
-		window.FileList &&
-		window.ArrayBuffer &&
-		window.Blob &&
-		window.FormData &&
-		window.ProgressEvent &&
-		URL && URL.revokeObjectURL && URL.createObjectURL &&
-		document.createElement( 'canvas' ).getContext
-	) {
-		return true;
-	}
-	
-	return false;
-}() );
+var imageEditingSupported = !!( window.FileList &&
+	window.ArrayBuffer &&
+	window.Blob &&
+	window.FormData &&
+	window.ProgressEvent &&
+	URL && URL.revokeObjectURL && URL.createObjectURL &&
+	document.createElement( 'canvas' ).getContext );
 var dropSupported = 'draggable' in $root[0];
 var historySupported = window.history && history.pushState;
 // HTML pointer-events is dumb and can't be tested for
@@ -112,7 +111,6 @@ if ( historySupported ) {
  * "state" is what triggered the creation (e.g. from history navigation)
  */
 var create = function( state ) {
-	var modified = {};
 	var settings = {};
 	var mouse = {
 		moved: false,
@@ -123,9 +121,8 @@ var create = function( state ) {
 	var spritesheet;
 	var changes = [];
 	var undoneChanges = [];
-	var names = {};
+	var usedNames = {};
 	var loadingImages = [];
-	var idsTable, idChanges, sheetData;
 	var panels = {};
 	var revisionsApi = new mw.Api( { parameters: {
 		action: 'query',
@@ -155,8 +152,7 @@ var create = function( state ) {
 	addControls( $boxTemplate, 'box' );
 	
 	// Pre-load modules which will be needed later
-	// TODO: Change to "mediawiki.ui.input" on MW1.25 update
-	mw.loader.load( [ 'jquery.byteLimit', 'mediawiki.action.history.diff', 'mediawiki.ui' ] );
+	var saveModules = mw.loader.using( [ 'jquery.byteLimit', 'mediawiki.action.history.diff', 'mediawiki.ui.input' ] );
 	
 	$root.addClass( 'spriteedit-loaded' );
 	
@@ -179,115 +175,144 @@ var create = function( state ) {
 		}
 		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + new Date().getTime();
 		
-		var spritesheetReady = $.Deferred();
-		
 		// Replace the spritesheet with a fresh uncached one to ensure
 		// we don't save over it with an old version.
 		// XHR is used instead of a CORS Image so a blob URL can
 		// be used for the background image, rather than the real URL.
 		// This works around the image being downloaded twice, probably
 		// caused by the background image not reusing the CORS request.
-		var xhr = new XMLHttpRequest();
-		xhr.open( 'GET', settings.sheet, true );
-		xhr.responseType = 'blob';
-		spritesheetReady.fail( function() {
-			xhr.abort();
-		} );
-		xhr.onload = function() {
-			if ( this.status !== 200 ) {
-				spritesheetReady.reject();
-				return;
-			}
-			
-			spritesheet = new Image();
-			spritesheet.onload = function() {
-				settings.sheetWidth = this.width;
-				settings.sheetHeight = this.height;
-				
-				if ( inlineStyle ) {
-					inlineStyle.disabled = true;
-					URL.revokeObjectURL( inlineStyle.url );
+		var sheetRequest = retryableRequest( function() {
+			var deferred = $.Deferred();
+			var requestTimeout;
+			var xhr = new XMLHttpRequest();
+			xhr.open( 'GET', settings.sheet, true );
+			xhr.responseType = 'blob';
+			xhr.onload = function() {
+				clearTimeout( requestTimeout );
+				if ( this.status !== 200 ) {
+					deferred.reject( 'http', {
+						textStatus: this.statusText ? this.status + ' ' + this.statusText : 'error'
+					} );
+					return;
 				}
-				inlineStyle = mw.util.addCSS(
-					'#spritedoc .sprite { background-image: url(' + this.src + ') !important }'
-				);
-				inlineStyle.url = this.src;
 				
-				spritesheetReady.resolve();
+				spritesheet = new Image();
+				spritesheet.onload = function() {
+					settings.sheetWidth = this.width;
+					settings.sheetHeight = this.height;
+					
+					if ( inlineStyle ) {
+						inlineStyle.disabled = true;
+						URL.revokeObjectURL( inlineStyle.url );
+					}
+					inlineStyle = mw.util.addCSS(
+						'#spritedoc .sprite { background-image: url(' + this.src + ') !important }'
+					);
+					inlineStyle.url = this.src;
+					
+					deferred.resolve();
+				};
+				spritesheet.src = URL.createObjectURL( this.response );
 			};
-			spritesheet.src = URL.createObjectURL( this.response );
-		};
-		xhr.send();
+			requestTimeout = setTimeout( function() {
+				xhr.abort();
+				deferred.reject( 'http', { textStatus: 'timeout' } );
+			}, 30 * 1000 );
+			
+			var errorCallback = xhr.onerror = function() {
+				if ( deferred.state() === 'pending' ) {
+					deferred.reject( 'http', { textStatus: 'error' } );
+				}
+			};
+			// Support: IE 9 only
+			// Use onreadystatechange to replace onabort
+			// to handle uncaught aborts
+			if ( xhr.onabort !== undefined ) {
+				xhr.onabort = errorCallback;
+			} else {
+				xhr.onreadystatechange = function() {
+					// Check readyState before timeout as it changes
+					if ( xhr.readyState === 4 ) {
+						// Allow onerror to be called first,
+						// but that will not handle a native abort
+						// Also, save errorCallback to a variable
+						// as xhr.onerror cannot be accessed
+						window.setTimeout( function() {
+							errorCallback();
+						} );
+					}
+				};
+			}
+			xhr.send();
+			
+			return deferred.promise( { abort: function() {
+				deferred.reject( 'http', { textStatus: 'abort' } );
+				xhr.abort();
+			} } );
+		} );
 	}
 	
 	// Check if the IDs page has been edited since opening
 	// the page and download the latest version if so
-	var newContentReady = $.Deferred();
-	var timestampRequest = revisionsApi.get( {
-		rvprop: 'timestamp',
-		pageids: idsPageId
-	} ).done( function( data ) {
+	var curContentRequest = retryableRequest( function() {
+		return revisionsApi.get( {
+			rvprop: 'timestamp',
+			pageids: idsPageId
+		} );
+	} );
+	var contentRequest = curContentRequest.then( function( data ) {
 		var currentTimestamp = fixTimestamp( data.query.pages[idsPageId].revisions[0].timestamp );
 		if ( currentTimestamp > $doc.data( 'idstimestamp' ) ) {
 			$doc.data( 'idstimestamp', currentTimestamp );
 			
-			var newContentRequest = parseApi.get( {
-				title: mw.config.get( 'wgPageName' ),
-				text: $( '<i>' ).html(
-					$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-				).html()
+			curContentRequest = retryableRequest( function() {
+				return parseApi.get( {
+					title: mw.config.get( 'wgPageName' ),
+					text: $( '<i>' ).html(
+						$.parseHTML( $doc.attr( 'data-refreshtext' ) )
+					).html()
+				} );
 			} ).done( function( data ) {
 				oldHtml = data.parse.text['*'];
 				$doc.html( oldHtml );
-				newContentReady.resolve();
-			} ).fail( function( code, data ) {
-				console.error( code, data );
-				newContentReady.reject();
 			} );
-			newContentReady.fail( function() {
-				newContentRequest.abort();
-			} );
+			
+			return curContentRequest;
 		} else {
 			oldHtml = $doc.html();
-			newContentReady.resolve();
 		}
-	} ).fail( function( code, data ) {
-		console.error( code, data );
-		newContentReady.reject();
-	} );
-	newContentReady.fail( function() {
-		timestampRequest.abort();
-	} );
+	} ).promise( { abort: curContentRequest.abort } );
 	
 	// Check if we have permission to edit the IDs page and
 	// spritesheet file and that the user isn't blocked
-	var permissionsRequest = new mw.Api().get( {
-		action: 'query',
-		meta: 'userinfo',
-		uiprop: 'rights|blockinfo'
-	} ).done( function( data ) {
+	var curPermissionsRequest = retryableRequest( function() {
+		return new mw.Api().get( {
+			action: 'query',
+			meta: 'userinfo',
+			uiprop: 'rights|blockinfo',
+			utf8: true
+		} );
+	} );
+	var permissionsRequest = curPermissionsRequest.then( function( data ) {
 		var info = data.query.userinfo;
 		
 		var canEdit = true;
 		if ( info.blockid ) {
 			canEdit = false;
 			var $blockNotice = $( '<p>' ).text( i18n.blockedNotice );
-			var reasonParsed;
 			if ( info.blockreason ) {
-				reasonParsed = parseApi.get( {
-					summary: info.blockreason
+				curPermissionsRequest = retryableRequest( function() {
+					return parseApi.get( { summary: info.blockreason } );
 				} ).done( function( data ) {
-					$blockNotice.append( '<br>', i18n.blockedReason, ' ',
-						$( '<span>' ).addClass( 'comment' ).html( data.parse.parsedsummary['*'] )
-					);
+					$blockNotice.append( '<br>', i18n.blockedReason.replace( /\$1/g,
+						$( '<span>' ).addClass( 'comment' ).html( data.parse.parsedsummary['*'] ).html()
+					) );
 				} );
 			}
-			$.when( reasonParsed ).always( function() {
-				mw.notify( $blockNotice, { autoHide: false } );
+			$.when( curPermissionsRequest ).always( function() {
+				mw.notify( $blockNotice, { type: 'error', autoHide: false } );
 			} );
-		}
-		
-		if ( canEdit ) {
+		} else {
 			var rights = info.rights;
 			$.each( [ 'ids', 'sprite' ], function() {
 				var requiredRights = $doc.data( this + 'protection' ).split( ',' );
@@ -302,22 +327,35 @@ var create = function( state ) {
 			} );
 			
 			if ( !canEdit ) {
-				mw.notify( i18n.noPermissionNotice, { autoHide: false } );
+				mw.notify( i18n.noPermissionNotice, { type: 'error', autoHide: false } );
 			}
 		}
 		
 		if ( !canEdit ) {
-			newContentReady.reject();
-			spritesheetReady && spritesheetReady.reject();
+			if ( sheetRequest ) {
+				sheetRequest.abort();
+			}
+			contentRequest.abort();
+			
 			destroy();
 		}
-	} );
+	} ).promise( { abort: curPermissionsRequest.abort } );
 	
-	$.when( newContentReady, permissionsRequest ).done( function() {
+	$.when( sheetRequest, contentRequest, permissionsRequest ).then( function() {
 		// Make sure the editor wasn't destroyed while we were waiting
 		if ( $root.hasClass( 'spriteedit-loaded' ) ) {
 			enable();
 		}
+	}, function( code, error ) {
+		// Fatal error, bail
+		if ( sheetRequest ) {
+			sheetRequest.abort();
+		}
+		contentRequest.abort();
+		permissionsRequest.abort();
+		
+		handleError( code, error );
+		destroy();
 	} );
 	
 	// Handle closing the editor on navigation
@@ -430,7 +468,7 @@ var create = function( state ) {
 			
 			$names.find( 'code' ).each( function() {
 				var $code = $( this );
-				names[$code.text()] = [ $code ];
+				usedNames[$code.text()] = [ $code ];
 			} );
 		} );
 		addControls( $boxes, 'box' );
@@ -611,7 +649,7 @@ var create = function( state ) {
 		$toolbox.append(
 			$( '<option>' ).prop( {
 				value: 'deprecate',
-				title: i18n.toolabrToolDeprecateTip
+				title: i18n.toolbarToolDeprecateTip
 			} ).text( i18n.toolbarToolDeprecate )
 		);
 		
@@ -831,7 +869,7 @@ var create = function( state ) {
 			
 			// Prevent saving and notify if there are duplicate names
 			if ( $doc.find( '.spriteedit-dupe' ).length ) {
-				mw.notify( i18n.dupeNamesNotice, { autoHide: false } );
+				mw.notify( i18n.dupeNamesNotice, { type: 'warn', autoHide: false } );
 				
 				return;
 			}
@@ -844,28 +882,22 @@ var create = function( state ) {
 			$button.addClass( 'spriteedit-processing' );
 			
 			if ( $toolbar.hasClass( 'spriteedit-saveform-open' ) ) {
-				if ( !idsTable ) {
-					parseNameChanges();
-				}
-				if ( modified.sheet && !sheetData ) {
-					parseSheetChanges();
-				}
-				
-				// If the diff is ready, we'll see if there are changes to be saved,
-				// otherwise it's likely faster to just save and assume changes
-				// were made, than wait for the diff to be ready
-				if ( modified.names === false && !modified.sheet ) {
+				// If we know changes weren't made (by performing a diff),
+				// quit out, otherwise it's likely faster to just save and
+				// assume changes were made, than wait for the diff to be ready.
+				// It will just be a null edit if nothing was changed.
+				if ( !names.modified && !sheet.modified ) {
 					destroy( true );
 					
 					return;
 				}
 				
-				saveChanges( $( '#spriteedit-summary' ).val(), idsTable );
+				saveChanges( $( '#spriteedit-summary' ).val() );
 				
 				return;
 			}
 			
-			mw.loader.using( [ 'jquery.byteLimit', 'mediawiki.ui' ], function() {
+			saveModules.done( function() {
 				$toolbar.addClass( 'spriteedit-saveform-open' );
 				$button
 					.addClass( 'mw-ui-constructive' )
@@ -899,9 +931,8 @@ var create = function( state ) {
 						$( '#spriteedit-summary' ).focus();
 						
 						// Do this after the transition so there is no stutter
-						if ( !idsTable ) {
-							parseNameChanges( true );
-						}
+						names.getDiff();
+						sheet.stash();
 					} );
 			} );
 		} );
@@ -934,47 +965,26 @@ var create = function( state ) {
 			);
 			var $changesText = changesPanel.$text;
 			
-			// Just re-display old content
-			if ( $changesText.text() ) {
-				$button.removeClass( 'spriteedit-processing' );
-				changesPanel.show();
-				return;
-			}
-			
-			if ( !idsTable ) {
-				parseNameChanges( true );
-			}
-			
-			if ( modified.sheet ) {
-				var sheetChanges = $.Deferred();
-				var newSpritesheet = new Image();
-				newSpritesheet.onload = function() {
-					sheetChanges.resolve( newSpritesheet );
-				};
-				if ( !sheetData ) {
-					parseSheetChanges();
-				}
-				sheetData.done( function( data ) {
-					newSpritesheet.src = data;
-				} );
-			}
-			
-			$.when(
-				sheetChanges,
-				idChanges,
-				mw.loader.using( 'mediawiki.action.history.diff' )
-			).done( function( newSpritesheet, diff ) {
-				if ( !newSpritesheet && !diff ) {
+			$.when( names.getDiff(), sheet.getData() ).then( function( diff, sheetData ) {
+				var sheetChanges;
+				if ( !diff && !sheetData ) {
 					$changesText.text( i18n.panelChangesNoDiffFromCur );
 				} else {
-					if ( newSpritesheet ) {
-						$changesText.find( '.spriteedit-sheet-changes' ).append(
-							$( '<div>' ).text( i18n.panelChangesSheetTitle ),
-							$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
-								$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
-								$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
-							)
-						);
+					if ( sheetData ) {
+						sheetChanges = $.Deferred();
+						var newSpritesheet = new Image();
+						newSpritesheet.onload = function() {
+							$changesText.find( '.spriteedit-sheet-changes' ).append(
+								$( '<div>' ).text( i18n.panelChangesSheetTitle ),
+								$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
+									$( '<span>' ).addClass( 'spriteedit-old-sheet' ).append( spritesheet ),
+									$( '<span>' ).addClass( 'spriteedit-new-sheet' ).append( newSpritesheet )
+								)
+							);
+							
+							sheetChanges.resolve();
+						};
+						newSpritesheet.src = sheetData;
 					}
 					if ( diff ) {
 						$changesText.find( '.spriteedit-id-changes' ).append(
@@ -984,9 +994,14 @@ var create = function( state ) {
 					}
 				}
 				
+				$.when( sheetChanges ).done( function() {
+					$button.removeClass( 'spriteedit-processing' );
+					changesPanel.show();
+				} );
+			}, function( code, data ) {
 				$button.removeClass( 'spriteedit-processing' );
-				changesPanel.show();
-			} ).fail( handleError );
+				handleError( code, data );
+			} );
 		} );
 		
 		
@@ -1093,7 +1108,7 @@ var create = function( state ) {
 				return;
 			}
 			
-			if ( names[text] ) {
+			if ( usedNames[text] ) {
 				// Wait until after edit change, as it may move the element
 				// which the tooltip should be anchored to
 				requestAnimationFrame( function() {
@@ -1340,199 +1355,441 @@ var create = function( state ) {
 		);
 	};
 	
-	/**
-	 * Constructs a lua table to of the current changes to upload
-	 * 
-	 * "withDiff" is a boolean determining whether a diff request should
-	 * also be performed on the table.
-	 */
-	var parseNameChanges = function( withDiff ) {
-		var $sections = $doc.find( '.spritedoc-section' );
-		var sectionIds = [];
-		var getSectionId = ( function() {
-			var id = 0;
-			return function() {
-				if ( id < sectionIds.length ) {
-					sectionIds.sort( function( a, b ) {
-						return a - b;
+	var names = ( function() {
+		var promises = {};
+		/**
+		 * Create a deferred object for the request type
+		 *
+		 * If a deferred of this type already exists, or names is not
+		 * modified, returns false.
+		 *
+		 * Otherwise, adds the deferred's promise to the list, and returns
+		 * the deferred.
+		 */
+		var makeDeferred = function( type ) {
+			if ( promises[type] ) {
+				return false;
+			}
+			
+			var deferred = $.Deferred();
+			promises[type] = deferred.promise();
+			if ( !names.modified ) {
+				deferred.resolve();
+				return false;
+			}
+			
+			return deferred;
+		};
+		
+		return {
+			/**
+			 * Invalidates all promises and sets the modified state, if specified
+			 */
+			invalidate: function( modified ) {
+				promises = {};
+				if ( modified !== undefined ) {
+					names.modified = modified;
+				}
+			},
+			/**
+			 * Returns the names Lua table
+			 */
+			getTable: function() {
+				var deferred = makeDeferred( 'table' );
+				if ( !deferred ) {
+					return promises.table;
+				}
+				
+				sheet.updatePositions().done( function() {
+					var $sections = $doc.find( '.spritedoc-section' );
+					var sectionIds = [];
+					var getSectionId = ( function() {
+						var id = 0;
+						return function() {
+							if ( id < sectionIds.length ) {
+								sectionIds.sort( function( a, b ) {
+									return a - b;
+								} );
+								
+								$.each( sectionIds, function( _, v ) {
+									if ( v - id > 1 ) {
+										return false;
+									}
+									id = v;
+								} );
+							}
+							
+							id++;
+							
+							sectionIds.push( id );
+							return id;
+						};
+					}() );
+					
+					$sections.each( function() {
+						var id = $( this ).data( 'section-id' );
+						if ( id !== undefined ) {
+							sectionIds.push( id );
+						}
 					} );
 					
-					$.each( sectionIds, function( _, v ) {
-						if ( v - id > 1 ) {
-							return false;
+					var headingRows = [];
+					var ids = [];
+					$sections.each( function() {
+						var $section = $( this );
+						var sectionId = $section.data( 'section-id' ) || getSectionId();
+						var sectionName = $section.find( '.mw-headline' ).text().replace( /\s+/g, ' ' );
+						headingRows.push(
+							'{ ' + luaStringQuote( sectionName ) + ', ' + luaKeyQuote( i18n.luaKeyId ) + ' = ' + sectionId + ' },'
+						);
+						
+						$section.find( '.spritedoc-box' ).each( function() {
+							var $box = $( this );
+							var pos = $box.data( 'pos' );
+							if ( pos === undefined ) {
+								pos = $box.data( 'new-pos' );
+							}
+							$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
+								var $this = $( this );
+								var id = $this.text().replace( /\s+/g, ' ' );
+								ids.push( {
+									sortKey: id.toLowerCase(),
+									id: id,
+									pos: pos,
+									section: sectionId,
+									deprecated: $this.hasClass( 'spritedoc-deprecated' )
+								} );
+							} );
+						} );
+					} );
+					ids.sort( function( a, b ) {
+						return a.sortKey > b.sortKey ? 1 : -1;
+					} );
+					
+					var idsRows = [];
+					$.each( ids, function() {
+						var idData = [
+							luaKeyQuote( i18n.luaKeyPos ) + ' = ' + this.pos,
+							luaKeyQuote( i18n.luaKeySection ) + ' = ' + this.section
+						];
+						if ( this.deprecated ) {
+							idData.push( luaKeyQuote( i18n.luaKeyDeprecated ) + ' = true' );
 						}
-						id = v;
+						
+						idsRows.push(
+							'[' + luaStringQuote( this.id ) + '] = ' +
+							'{ ' + idData.join( ', ' ) + ' },'
+						);
 					} );
-				}
-				
-				id++;
-				
-				sectionIds.push( id );
-				return id;
-			};
-		}() );
-		
-		$sections.each( function() {
-			var id = $( this ).data( 'section-id' );
-			if ( id !== undefined ) {
-				sectionIds.push( id );
-			}
-		} );
-		
-		var headingRows = [];
-		var ids = [];
-		$sections.each( function() {
-			var $section = $( this );
-			var sectionId = $section.data( 'section-id' ) || getSectionId();
-			var sectionName = $section.find( '.mw-headline' ).text().replace( /\s+/g, ' ' );
-			headingRows.push(
-				'{ ' + luaStringQuote( sectionName ) + ', id = ' + sectionId + ' },'
-			);
-			
-			$section.find( '.spritedoc-box' ).each( function() {
-				var $box = $( this );
-				var pos = $box.data( 'pos' );
-				if ( pos === undefined ) {
-					pos = $box.data( 'new-pos' );
-				}
-				$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
-					var $this = $( this );
-					var id = $this.text().replace( /\s+/g, ' ' );
-					ids.push( {
-						sortKey: id.toLowerCase(),
-						id: id,
-						pos: pos,
-						section: sectionId,
-						deprecated: $this.hasClass( 'spritedoc-deprecated' )
-					} );
+					
+					deferred.resolve( [
+						'return {',
+						'	' + luaKeyQuote( i18n.luaKeySections ) + ' = {',
+						'		' + headingRows.join( '\n\t\t' ),
+						'	},',
+						'	' + luaKeyQuote( i18n.luaKeyIds ) + ' = {',
+						'		' + idsRows.join( '\n\t\t' ),
+						'	}',
+						'}'
+					].join( '\n' ) );
 				} );
-			} );
-		} );
-		ids.sort( function( a, b ) {
-			return a.sortKey > b.sortKey ? 1 : -1;
-		} );
-		
-		var idsRows = [];
-		$.each( ids, function() {
-			var idData = [
-				'pos = ' + this.pos,
-				'section = ' + this.section
-			];
-			if ( this.deprecated ) {
-				idData.push( 'deprecated = true' );
+				
+				return promises.table;
+			},
+			/**
+			 * Sets the names Lua table to the specified content
+			 */
+			setTable: function( table ) {
+				names.invalidate( true );
+				promises.table = $.Deferred().resolve( table ).promise();
+			},
+			/**
+			 * Requests a diff of the names Lua table against
+			 * the current revisions content
+			 */
+			getDiff: function() {
+				var deferred = makeDeferred( 'diff' );
+				if ( !deferred ) {
+					return promises.diff;
+				}
+				
+				names.getTable().then( function( table ) {
+					return retryableRequest( function() {
+						return new mw.Api( {
+							ajax: { contentType: 'multipart/form-data' }
+						} ).post( {
+							action: 'query',
+							prop: 'revisions',
+							pageids: idsPageId,
+							rvprop: '',
+							rvdifftotext: table,
+							rvlimit: 1,
+							utf8: true
+						} );
+					} );
+				} ).then( function( data ) {
+					var diff = makeDiff( data );
+					names.modified = !!diff;
+					deferred.resolve( diff );
+				}, function( code, data ) {
+					deferred.reject( code, data );
+					promises.diff = null;
+				} );
+				
+				return promises.diff;
+			},
+			/**
+			 * Saves the names table
+			 *
+			 * "summary" is the edit summary for the edit.
+			 */
+			save: function( summary ) {
+				var deferred = makeDeferred( 'save' );
+				if ( !deferred ) {
+					return promises.save;
+				}
+				
+				names.getTable().then( function( table ) {
+					// TODO: Check if edit actually succeeded on failure or null edit
+					return retryableRequest( function() {
+						return new mw.Api( {
+							ajax: { contentType: 'multipart/form-data' }
+						} ).postWithToken( 'edit', {
+							action: 'edit',
+							nocreate: true,
+							pageid: idsPageId,
+							text: table,
+							basetimestamp: $doc.data( 'idstimestamp' ),
+							summary: summary,
+							utf8: true
+						} );
+					} );
+				} ).then( deferred.resolve, function( code, data ) {
+					deferred.reject( code, data );
+					promises.save = null;
+				} );
+				
+				return promises.save;
 			}
-			
-			idsRows.push(
-				'[' + luaStringQuote( this.id ) + '] = ' +
-				'{ ' + idData.join( ', ' ) + ' },'
-			);
-		} );
-		
-		idsTable = [
-			'return {',
-			'	sections = {',
-			'		' + headingRows.join( '\n\t\t' ),
-			'	},',
-			'	ids = {',
-			'		' + idsRows.join( '\n\t\t' ),
-			'	}',
-			'}'
-		].join( '\n' );
-		
-		if ( !withDiff ) {
-			return;
-		}
-		
-		idChanges = $.Deferred();
-		revisionsApi.post( {
-			pageids: idsPageId,
-			rvprop: '',
-			rvdifftotext: idsTable,
-			rvlimit: 1
-		} ).done( function( data ) {
-			idChanges.resolve( makeDiff( data ) );
-		} )
-			// Don't handle error directly, so it can fail silently unless attempting
-			// to view the diff, as this isn't necessary for saving
-			.fail( idChanges.reject );
-		
-		idChanges.done( function( diff ) {
-			modified.names = !!diff;
-		} );
-	};
+		};
+	}() );
 	
-	/**
-	 * Adds the changed/new images to the spritesheet
-	 */
-	var parseSheetChanges = function() {
-		sheetData = $.Deferred();
-		spritesheetReady.done( function() {
-			var sheetCanvas = getCanvas( 'sheet' );
-			var lastPos = $doc.data( 'pos' );
-			var usedPos = {};
-			usedPos[lastPos] = true;
-			
-			var newImgs = [];
-			$doc.find( '.spritedoc-box' ).each( function() {
-				var $box = $( this );
-				var pos = $box.data( 'pos' );
-				if ( pos === undefined ) {
-					newImgs.push( $box );
-				} else {
-					usedPos[pos] = true;
-					if ( pos > lastPos ) {
-						lastPos = pos;
-					}
-				}
-			} );
-			
-			if ( newImgs.length ) {
-				var unusedPos = [];
-				for ( var i = 1; i <= lastPos; i++ ) {
-					if ( !usedPos[i] ) {
-						unusedPos.push( i );
-					}
-				}
-				
-				var origLastPos = lastPos;
-				newImgs.forEach( function( $box ) {
-					$box.data( 'new-pos', unusedPos.shift() || ++lastPos );
-				} );
-				
-				if ( lastPos !== origLastPos ) {
-					var imagesPerRow = settings.sheetWidth / settings.imageWidth;
-					settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
-					sheetCanvas.resize();
-				}
+	var sheet = ( function() {
+		var promises = {};
+		/**
+		 * Create a deferred object for the request type
+		 *
+		 * If a deferred of this type already exists, or the sheet is not
+		 * modified, returns false.
+		 *
+		 * Otherwise, adds the deferred's promise to the list, and returns
+		 * the deferred.
+		 */
+		var makeDeferred = function( type ) {
+			if ( promises[type] ) {
+				return false;
 			}
 			
-			$.when.apply( null, loadingImages ).done( function() {
-				sheetCanvas.clear();
-				sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
+			var deferred = $.Deferred();
+			promises[type] = deferred.promise();
+			if ( !sheet.modified ) {
+				deferred.resolve();
+				return false;
+			}
+			
+			return deferred;
+		};
+		
+		return {
+			/**
+			 * Invalidates all promises and sets the modified state, if specified
+			 */
+			invalidate: function( modified ) {
+				promises = {};
+				if ( modified !== undefined ) {
+					sheet.modified = modified;
+				}
+			},
+			/**
+			 * Invalidates just the stash's promise
+			 */
+			invalidateStash: function() {
+				promises.stash = null;
+			},
+			/**
+			 * Updates the potential position information
+			 * for any new images, and resizes the canvas
+			 */
+			updatePositions: function() {
+				var deferred = makeDeferred( 'pos' );
+				if ( !deferred ) {
+					return promises.pos;
+				}
 				
-				$doc.find( '.spriteedit-new' ).each( function() {
+				var lastPos = $doc.data( 'pos' );
+				var usedPos = {};
+				usedPos[lastPos] = true;
+				
+				var newImgs = [];
+				$doc.find( '.spritedoc-box' ).each( function() {
 					var $box = $( this );
-					var img = $box.find( 'img' )[0];
 					var pos = $box.data( 'pos' );
 					if ( pos === undefined ) {
-						pos = $box.data( 'new-pos' );
+						newImgs.push( $box );
+					} else {
+						usedPos[pos] = true;
+						if ( pos > lastPos ) {
+							lastPos = pos;
+						}
+					}
+				} );
+				
+				if ( newImgs.length ) {
+					var unusedPos = [];
+					for ( var i = 1; i <= lastPos; i++ ) {
+						if ( !usedPos[i] ) {
+							unusedPos.push( i );
+						}
 					}
 					
-					var posPx = posToPx( pos );
-					sheetCanvas.ctx.clearRect(
-						posPx.left,
-						posPx.top,
-						settings.imageWidth,
-						settings.imageHeight
-					);
-					sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
-				} );
-				sheetData.resolve( sheetCanvas.canvas.toDataURL() );
+					newImgs.forEach( function( $box ) {
+						$box.data( 'new-pos', unusedPos.length ? unusedPos.shift() : ++lastPos );
+					} );
+					
+					if ( !unusedPos.length ) {
+						var imagesPerRow = settings.sheetWidth / settings.imageWidth;
+						settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
+						getCanvas( 'sheet' ).resize();
+					}
+				}
 				
-				loadingImages = [];
-			} );
-		} );
-	};
+				deferred.resolve();
+				
+				return promises.pos;
+			},
+			/**
+			 * Draws the new sheet and returns it as a data URL
+			 */
+			getData: function() {
+				var deferred = makeDeferred( 'sheet' );
+				if ( !deferred ) {
+					return promises.sheet;
+				}
+				
+				$.when( sheet.updatePositions(), $.when.apply( null, loadingImages ) ).then( function() {
+					var sheetCanvas = getCanvas( 'sheet' );
+					sheetCanvas.clear();
+					sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
+					
+					$doc.find( '.spriteedit-new' ).each( function() {
+						var $box = $( this );
+						var img = $box.find( 'img' )[0];
+						var pos = $box.data( 'pos' );
+						if ( pos === undefined ) {
+							pos = $box.data( 'new-pos' );
+						}
+						
+						var posPx = posToPx( pos );
+						sheetCanvas.ctx.clearRect(
+							posPx.left,
+							posPx.top,
+							settings.imageWidth,
+							settings.imageHeight
+						);
+						sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
+					} );
+					deferred.resolve( sheetCanvas.canvas.toDataURL() );
+					
+					loadingImages = [];
+				}, function() {
+					deferred.reject();
+					promises.sheet = null;
+				} );
+				
+				return promises.sheet;
+			},
+			/**
+			 * Stashes the sheet to the server
+			 */
+			stash: function() {
+				var deferred = makeDeferred( 'stash' );
+				if ( !deferred ) {
+					return promises.stash;
+				}
+				
+				sheet.getData().then( function( sheetData ) {
+					var sheetByteString = atob( sheetData.split( ',' )[1] );
+					var sheetByteStringLen = sheetByteString.length;
+					var buffer = new ArrayBuffer( sheetByteStringLen );
+					var intArray = new Uint8Array( buffer );
+					for ( var i = 0; i < sheetByteStringLen; i++) {
+						intArray[i] = sheetByteString.charCodeAt( i );
+					}
+					var sheetBytes = new Blob( [buffer], { type: 'image/png' } );
+					
+					return retryableRequest( function() {
+						return new mw.Api( {
+							ajax: { contentType: 'multipart/form-data' }
+						} ).postWithToken( 'edit', {
+							action: 'upload',
+							stash: true,
+							ignorewarnings: true,
+							filename: $doc.data( 'spritesheet' ),
+							file: sheetBytes
+						} );
+					} );
+				} ).then( function( data ) {
+					deferred.resolve( data.upload.filekey );
+				}, function( code, data ) {
+					deferred.reject( code, data );
+					promises.stash = null;
+				} );
+				
+				return promises.stash;
+			},
+			/**
+			 * Commits the stash to the server
+			 *
+			 * If the request fails, will re-stash the image and commit it, once.
+			 * 
+			 * "summary" is the edit summary for the upload.
+			 * "retried" is a boolean stating whether the upload has
+			 * already been retried.
+			 */
+			save: function( summary, retried ) {
+				var deferred = makeDeferred( 'save' );
+				if ( !deferred ) {
+					return promises.save;
+				}
+				
+				sheet.stash().then( function( key ) {
+					// TODO: Check if upload actually succeeded on failure
+					return retryableRequest( function() {
+						return new mw.Api().postWithToken( 'edit', {
+							action: 'upload',
+							ignorewarnings: true,
+							comment: summary,
+							filename: $doc.data( 'spritesheet' ),
+							filekey: key
+						} );
+					} );
+				} ).then( deferred.resolve, function( code, data ) {
+					promises.save = null;
+					if ( retried ) {
+						if ( code === 'stashedfilenotfound' ) {
+							sheet.invalidateStash();
+						}
+						deferred.reject( code, data );
+					} else {
+						sheet.invalidateStash();
+						sheet.save( summary, true );
+					}
+				} );
+				
+				return promises.save;
+			}
+		};
+	}() );
 	
 	/**
 	 * Performs a save of the ID changes and/or spritesheet changes
@@ -1546,21 +1803,16 @@ var create = function( state ) {
 	 * Otherwise, whatever error occurred will be displayed.
 	 *
 	 * "summary" is the text from the summary field.
-	 * "idsTable" is the stringified lua table containing the ids and sections
 	 * "refresh" is a boolean, which when true will cause the sprite documentation
 	 * to be reparsed after saving (e.g. in the event of an edit conflict).
 	 */
-	var saveChanges = function( summary, idsTable, refresh ) {
-		var idsEdit;
-		if ( modified.names !== false ) {
-			idsEdit = new mw.Api().postWithToken( 'edit', {
-				action: 'edit',
-				nocreate: true,
-				pageid: idsPageId,
-				text: idsTable,
-				basetimestamp: $doc.data( 'idstimestamp' ),
-				summary: summary
-			} ).done( function( data ) {
+	var saveChanges = function( summary, refresh ) {
+		var idsEdit, sheetEdit;
+		if ( names.modified ) {
+			// Wait for image upload before uploading text
+			idsEdit = sheet.stash().then( function() {
+				return names.save( summary );
+			} ).then( function( data ) {
 				// Null edit, nothing to do here
 				if ( data.edit.nochange === '' ) {
 					return;
@@ -1569,64 +1821,45 @@ var create = function( state ) {
 				$doc.data( 'idstimestamp', fixTimestamp( data.edit.newtimestamp ) );
 				
 				// Purge this page so the changes show up immediately
-				new mw.Api().get( {
-					action: 'purge',
-					pageids: mw.config.get( 'wgArticleId' )
+				retryableRequest( function() {
+					return new mw.Api().get( {
+						action: 'purge',
+						pageids: mw.config.get( 'wgArticleId' )
+					} );
 				} );
-			} ).fail( handleSaveError );
+			}, handleSaveError );
 		}
-		$.when( idsEdit ).done( function() {
-			var sheetEdit;
-			$.when( sheetData ).done( function( data ) {
-				if ( !data ) {
-					return;
-				}
-				
-				var sheetByteString = atob( data.split( ',' )[1] );
-				var sheetByteStringLen = sheetByteString.length;
-				var buffer = new ArrayBuffer( sheetByteStringLen );
-				var intArray = new Uint8Array( buffer );
-				for ( var i = 0; i < sheetByteStringLen; i++) {
-					intArray[i] = sheetByteString.charCodeAt( i );
-				}
-				var sheetBytes = new Blob( [buffer], { type: 'image/png' } );
-				
-				sheetEdit = new mw.Api( {
-					ajax: { contentType: 'multipart/form-data' }
-				} ).postWithToken( 'edit', {
-					action: 'upload',
-					ignorewarnings: true,
-					comment: summary,
-					filename: $doc.data( 'spritesheet' ),
-					file: sheetBytes
-				} ).fail( handleError );
-			} );
-			$.when( sheetData, sheetEdit ).done( function() {
-				var newContent;
-				if ( refresh ) {
-					newContent = parseApi.get( {
+		if ( sheet.modified ) {
+			sheetEdit = sheet.save( summary ).fail( handleSaveError );
+		}
+		
+		$.when( idsEdit, sheetEdit ).done( function() {
+			var newContent;
+			if ( refresh ) {
+				newContent = retryableRequest( function() {
+					return parseApi.get( {
 						title: mw.config.get( 'wgPageName' ),
 						text: $( '<i>' ).html(
 							$.parseHTML( $doc.attr( 'data-refreshtext' ) )
 						).html()
 					} );
-				}
-				
-				$.when( newContent ).done( function( data ) {
-					if ( refresh ) {
-						$doc.html( data.parse.text['*'] );
-					}
-					
-					destroy();
-					
-					mw.hook( 'postEdit' ).fire( { message: i18n.changesSavedNotice } );
 				} );
+			}
+			
+			$.when( newContent ).done( function( data ) {
+				if ( refresh ) {
+					$doc.html( data.parse.text['*'] );
+				}
+			} ).always( function() {
+				destroy();
+				
+				mw.hook( 'postEdit' ).fire( { message: i18n.changesSavedNotice } );
 			} );
 		} );
 	};
 	
 	/**
-	 * Handles special case errors that ocurr when saving (AKA, handleError with edit conflicts)
+	 * Handles special case errors that occur when saving (AKA, handleError with edit conflicts)
 	 *
 	 * If there's an edit conflict, this will be display a barely human-usable edit conflict
 	 * panel, where the user may manually merge the raw lua table changes. Sprite edit conflict
@@ -1637,6 +1870,7 @@ var create = function( state ) {
 	 */
 	var handleSaveError = function( code, data ) {
 		if ( code !== 'editconflict' ) {
+			$( '#spriteedit-save' ).removeClass( 'spriteedit-processing' );
 			handleError( code, data );
 			return;
 		}
@@ -1649,10 +1883,11 @@ var create = function( state ) {
 				left: { text: i18n.panelConflictReview, config: {
 					id: 'review-conflict-changes',
 					action: function() {
-						if ( $( this ).hasClass( 'spriteedit-processing' ) ) {
+						var $button = $( this );
+						if ( $button.hasClass( 'spriteedit-processing' ) ) {
 							return;
 						}
-						$( this ).blur().addClass( 'spriteedit-processing' );
+						$button.blur().addClass( 'spriteedit-processing' );
 						
 						var changesPanel = panels.ecchanges || panel(
 							'ecchanges',
@@ -1667,36 +1902,33 @@ var create = function( state ) {
 							} } }
 						);
 						
-						revisionsApi.post( {
-							pageids: idsPageId,
-							rvprop: '',
-							rvdifftotext: $( this ).closest( '.spriteedit-dialog-panel' )
-								.find( 'textarea:first' ).val(),
-							rvlimit: 1
-						} ).done( function( data ) {
+						names.setTable( conflictPanel.$text.find( 'textarea:first' ).val() );
+						names.getDiff().then( function( diff ) {
 							changesPanel.clean();
 							
-							var diff = makeDiff( data );
 							if ( !diff ) {
 								diff = i18n.panelChangesNoDiffFromCur;
 							}
 							changesPanel.$text.find( '.spriteedit-id-changes' ).append( diff );
 							changesPanel.show();
-						} ).fail( handleError );
+						}, function( code, data ) {
+							$button.removeClass( 'spriteedit-processing' );
+							handleError( code, data );
+						} );
 					}
 				} },
 				right: { text: i18n.panelConflictSave, config: {
 					id: 'save-conflict',
 					type: 'constructive',
 					action: function() {
-						if ( $( this ).hasClass( 'spriteedit-processing' ) ) {
+						var $button = $( this );
+						if ( $button.hasClass( 'spriteedit-processing' ) ) {
 							return;
 						}
-						$( this ).blur().addClass( 'spriteedit-processing' );
+						$button.blur().addClass( 'spriteedit-processing' );
 						
-						var summary = $( '#spriteedit-summary' ).val();
-						idsTable = conflictPanel.$text.find( 'textarea:first' ).val();
-						saveChanges( summary, idsTable, true );
+						names.setTable( conflictPanel.$text.find( 'textarea:first' ).val() );
+						saveChanges( $( '#spriteedit-summary' ).val(), true );
 					}
 				} }
 			},
@@ -1705,13 +1937,13 @@ var create = function( state ) {
 			}
 		);
 		
-		var idsDiff = revisionsApi.post( {
-			pageids: idsPageId,
-			rvprop: '',
-			rvdifftotext: idsTable,
-			rvlimit: 1
-		} ).fail( handleError );
-		revisionsApi.get( { pageids: idsPageId } ).done( function( data ) {
+		$.when(
+			names.getTable(),
+			names.getDiff(),
+			retryableRequest( function() {
+				return revisionsApi.get( { pageids: idsPageId } );
+			} )
+		).then( function( table, diff, curTextData ) {
 			var opt = mw.user.options.get( [ 'rows', 'cols' ] );
 			var $textbox = $( '<textarea>' ).addClass( 'mw-ui-input' ).prop( {
 				rows: opt.rows,
@@ -1719,25 +1951,26 @@ var create = function( state ) {
 			} );
 			
 			var $curText = $( '<div>' ).append(
-				$textbox.clone().val( data.query.pages[idsPageId].revisions[0]['*'] )
+				$textbox.clone().val( curTextData.query.pages[idsPageId].revisions[0]['*'] )
 			);
 			var $oldText = $( '<div>' ).append(
-				$textbox.clone().prop( 'readonly', true ).val( idsTable )
+				$textbox.clone().prop( 'readonly', true ).val( table )
 			);
 			
-			idsDiff.done( function( data ) {
-				var $diff = $( '<div>' ).append( makeDiff( data ) );
-				
-				conflictPanel.$text
-					.append( $( '<p>' ).text( i18n.panelConflictCurText ) )
-					.append( $curText )
-					.append( $diff )
-					.append( $( '<p>' ).text( i18n.panelConflictYourText ) )
-					.append( $oldText );
-				
-				conflictPanel.show();
-			} );
-		} ).fail( handleError );
+			var $diff = $( '<div>' ).append( diff );
+			
+			conflictPanel.$text
+				.append( $( '<p>' ).text( i18n.panelConflictCurText ) )
+				.append( $curText )
+				.append( $diff )
+				.append( $( '<p>' ).text( i18n.panelConflictYourText ) )
+				.append( $oldText );
+			
+			conflictPanel.show();
+		}, function( code, data ) {
+			$( '#spriteedit-save' ).removeClass( 'spriteedit-processing' );
+			handleError( code, data );
+		} );
 	};
 	
 	/**
@@ -1786,10 +2019,6 @@ var create = function( state ) {
 				$parent: $parent
 			} );
 		} );
-		
-		if ( !modified.sheet && $doc.find( '.spriteedit-new' ).length ) {
-			modified.sheet = true;
-		}
 	};
 	
 	/**
@@ -2488,6 +2717,8 @@ var create = function( state ) {
 					if ( content.$elem.parent().hasClass( 'spritedoc-name' ) ) {
 						updateName( content.oldText, content.text, content.$elem );
 					}
+					
+					names.invalidate( true );
 				break;
 				
 				case 'insert':
@@ -2505,6 +2736,9 @@ var create = function( state ) {
 						content.$elem.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 							updateName( undefined, $( this ).text(), $( this ) );
 						} );
+						if ( $doc.find( '.spriteedit-new' ).length ) {
+							sheet.invalidate( true );
+						}
 					} else if ( content.$elem.hasClass( 'spritedoc-name' ) ) {
 						if ( moved ) {
 							var $box = content.$elem.closest( '.spritedoc-box' );
@@ -2521,6 +2755,8 @@ var create = function( state ) {
 					requestAnimationFrame( function() {
 						scrollIntoView( content.$elem );
 					} );
+					
+					names.invalidate( true );
 				break;
 				
 				case 'delete':
@@ -2533,11 +2769,14 @@ var create = function( state ) {
 						content.$elem.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 							updateName( $( this ).text(), undefined, $( this ) );
 						} );
+						sheet.invalidate( !!$doc.find( '.spriteedit-new' ).length );
 					} else if ( content.$elem.hasClass( 'spritedoc-name' ) ) {
 						var $code = content.$elem.find( 'code' );
 						updateName( $code.text(), undefined, $code );
 						updateBoxSorting( $box );
 					}
+					
+					names.invalidate( true );
 				break;
 				
 				case 'replace image':
@@ -2549,7 +2788,7 @@ var create = function( state ) {
 						content.$parent.children().css( 'display', 'none' );
 					}
 					content.$parent.append( content.$elem );
-					modified.sheet = true;
+					sheet.invalidate( true );
 				break;
 				
 				case 'reset image':
@@ -2558,12 +2797,14 @@ var create = function( state ) {
 					content.$parent.parent().removeClass( 'spriteedit-new' );
 					
 					if ( !$doc.find( '.spriteedit-new' ).length ) {
-						modified.sheet = false;
+						sheet.invalidate( false );
 					}
 				break;
 				
 				case 'toggle deprecation':
 					content.$elem.toggleClass( 'spritedoc-deprecated' );
+					
+					names.invalidate( true );
 				break;
 			}
 			
@@ -2573,22 +2814,23 @@ var create = function( state ) {
 				if ( !queueChange ) {
 					func.commit();
 				}
-			} else {
-				// These parsed changes are no longer up-to-date
-				idsTable = idChanges = sheetData = modified.names = null;
 			}
 		};
 		func.commit = function() {
 			addHistory( queue );
-			// These parsed changes are no longer up-to-date
-			idsTable = idChanges = sheetData = modified.names = null;
 			
 			queue = [];
 		};
 		func.discard = function() {
 			queue = [];
 			
+			if ( !$doc.find( '.spriteedit-new' ).length ) {
+				sheet.invalidate( false );
+			}
+			
 			if ( !changes.length ) {
+				names.invalidate( false );
+				
 				$.each( [
 					'#spriteedit-save',
 					'#spriteedit-summary',
@@ -2625,13 +2867,13 @@ var create = function( state ) {
 		}
 		
 		$.each( [
-				'#spriteedit-undo',
-				'#spriteedit-save',
-				'#spriteedit-summary',
-				'#spriteedit-review-button'
-			], function() {
-				$( this ).prop( 'disabled', false );
-			} );
+			'#spriteedit-undo',
+			'#spriteedit-save',
+			'#spriteedit-summary',
+			'#spriteedit-review-button'
+		], function() {
+			$( this ).prop( 'disabled', false );
+		} );
 	};
 	
 	/**
@@ -2700,7 +2942,13 @@ var create = function( state ) {
 			}
 		}
 		
+		if ( !$doc.find( '.spriteedit-new' ).length ) {
+			sheet.invalidate( false );
+		}
+		
 		if ( !changes.length ) {
+			names.invalidate( false );
+			
 			$.each( [
 				'#spriteedit-undo',
 				'#spriteedit-save',
@@ -2719,9 +2967,9 @@ var create = function( state ) {
 	 */
 	var updateName = function( oldText, newText, $elem ) {
 		if ( oldText ) {
-			var oldNames = names[oldText];
+			var oldNames = usedNames[oldText];
 			if ( oldNames.length === 1 ) {
-				delete names[oldText];
+				delete usedNames[oldText];
 			} else {
 				$.each( oldNames, function( i ) {
 					if ( $elem.is( this ) ) {
@@ -2738,9 +2986,9 @@ var create = function( state ) {
 		var $item = $elem.parent();
 		var oldIndex = $item.index();
 		if ( newText ) {
-			var newNames = names[newText];
+			var newNames = usedNames[newText];
 			if ( !newNames ) {
-				newNames = names[newText] = [];
+				newNames = usedNames[newText] = [];
 				$elem.removeClass( 'spriteedit-dupe' );
 			} else {
 				if ( newNames.length === 1 ) {
@@ -2767,7 +3015,7 @@ var create = function( state ) {
 	};
 	
 	/**
-	 * Update's the box's sort key and sorts it.
+	 * Updates the box's sort key and sorts it.
 	 */
 	var updateBoxSorting = function( $box ) {
 		var name = $box.find( '.spritedoc-name' ).first().text();
@@ -2790,35 +3038,6 @@ var create = function( state ) {
 				$parent: $parent
 			}, false, true );
 		}
-	};
-	
-	/**
-	 * Handles generic API errors
-	 *
-	 * Just uselessly displays whatever error the API returns.
-	 * Hopefully the user can retry whatever they were doing.
-	 *
-	 * "code" and "data" are the standard variables returned by a mw.Api promise rejection.
-	 */
-	var handleError = function( code, data ) {
-		var errorPanel = panels.error || panel(
-			'error',
-			i18n.panelErrorTitle
-		);
-		
-		var errorText;
-		if ( code === 'http' ) {
-			if ( data.textStatus === 'error' ) {
-				errorText = i18n.panelErrorConnection;
-			} else {
-				errorText = i18n.panelErrorHttp + ' ' + data.textStatus;
-			}
-		} else {
-			errorText = i18n.panelErrorApi + ' ' + data.error.info;
-		}
-		errorPanel.$text.text( errorText );
-		
-		errorPanel.show();
 	};
 	
 	/**
@@ -2860,7 +3079,7 @@ var create = function( state ) {
 		$( '.mw-editsection' ).add( '.mw-editsection-like' ).css( 'display', '' );
 		
 		// Release old image URL references
-		if ( modified.sheet ) {
+		if ( sheet.modified ) {
 			$.each( changes, function() {
 				if ( this.action === 'replace image' ) {
 					URL.revokeObjectURL( this.content.$oldImg.attr( 'src' ) );
@@ -2870,7 +3089,7 @@ var create = function( state ) {
 		
 		if ( restore ) {
 			// Release current image URL references
-			if ( modified.sheet ) {
+			if ( sheet.modified ) {
 				$doc.find( '.spritedoc-image' ).find( 'img' ).each( function() {
 					URL.revokeObjectURL( this.src );
 				} );
@@ -2926,7 +3145,9 @@ $.fn.transitionEnd = function( callback ) {
 			$elem.off( 'transitionend.spriteEdit' );
 		} );
 	} else {
-		callback.call( this );
+		this.each( function() {
+			callback.call( this );
+		} );
 	}
 	
 	return this;
@@ -2955,7 +3176,7 @@ $.fn.redraw = function() {
  */
 var getAlphaIndex = function( text, $elem, $parent ) {
 	var index;
-	var $items = $parent && $parent.children() || $elem.siblings();
+	var $items = $parent ? $parent.children() : $elem.siblings();
 	$items.each( function() {
 		var $this = $( this );
 		var compare = $this.attr( 'data-sort-key' ) || $this.text();
@@ -3079,6 +3300,17 @@ var luaStringQuote = function( str ) {
 };
 
 /**
+ * Returns a lua key with quotes and brackets if necessary
+ */
+var luaKeyQuote = function( str ) {
+	if ( str.match( /^[a-z_]\w*$/i ) ) {
+		return str;
+	}
+	
+	return '[' + luaStringQuote( str ) + ']';
+};
+
+/**
  * Add various types of in-page controls to a set of elements
  *
  * "$elems" is a jQuery object containing the elements to add controls to.
@@ -3163,6 +3395,75 @@ var supports = function( prop, val ) {
 	var elStyle = document.createElement( 'i' ).style;
 	elStyle.cssText = prop + ':' + val;
 	return elStyle[camelProp] !== '';
+};
+
+/**
+ * Retries a request once if it fails
+ *
+ * Always returns an abortable promise, even if the request itself isn't abortable.
+ *
+ * "request" is a function which will run the request,
+ * and should return the request's promise.
+ * "delay" is the amount of milliseconds to wait before retrying.
+ * "retries" is the amount of times to retry
+ */
+var retryableRequest = function( request, delay, retries ) {
+	var deferred = $.Deferred();
+	var curRequest;
+	var timeout;
+	retries = retries || 1;
+	var attemptRequest = function( attempt ) {
+		( curRequest = request() ).then( deferred.resolve, function( code, data ) {
+			if ( attempt <= retries ) {
+				timeout = setTimeout( function() {
+					attemptRequest( ++attempt );
+				}, delay || 1000 );
+			} else {
+				deferred.reject( code, data );
+			}
+			
+		} );
+	};
+	attemptRequest( 1 );
+	
+	return deferred.promise( { abort: function() {
+		if ( curRequest.abort ) {
+			curRequest.abort();
+		}
+		clearTimeout( timeout );
+	} } );
+};
+
+/**
+ * Handles generic API errors
+ *
+ * Just uselessly displays whatever error the API returns.
+ * Hopefully the user can retry whatever they were doing.
+ *
+ * "code" and "data" are the standard variables returned by a mw.Api promise rejection.
+ */
+var handleError = function( code, data ) {
+	var errorTitle = i18n.errorGeneric;
+	var errorText;
+	if ( code === 'http' ) {
+		// Not an error
+		if ( data.textStatus === 'abort' ) {
+			return;
+		}
+		
+		if ( data.textStatus === 'error' || data.textStatus === 'timeout' ) {
+			errorTitle = i18n.errorConnection;
+			errorText = i18n.errorConnectionText;
+		} else {
+			errorTitle = i18n.errorHttp;
+			errorText = data.textStatus;
+		}
+	} else {
+		errorTitle = i18n.errorApi;
+		errorText = data.error.info;
+	}
+	
+	mw.notify( errorText, { title: errorTitle, type: 'error', autoHide: false } );
 };
 
 
