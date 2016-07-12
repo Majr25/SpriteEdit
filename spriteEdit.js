@@ -3532,14 +3532,7 @@ if ( !( 'firstElementChild' in $root[0] ) ) {
 
 
 // Finally start the editor
-mw.loader.using( [
-	'mediawiki.util',
-	'mediawiki.api',
-	'user.options',
-	'jquery.throttle-debounce'
-], function() {
-	create( 'initial' );
-} );
+create( 'initial' );
 
 
 }() );

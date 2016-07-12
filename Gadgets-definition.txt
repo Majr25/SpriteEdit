@@ -1,0 +1,2 @@
+* spriteEditLoader[ResourceLoader|dependencies=mediawiki.util,mediawiki.notification|default]|spriteEditLoader.js
+* spriteEdit[ResourceLoader|dependencies=mediawiki.util,mediawiki.api,mediawiki.ui.button,user.options,jquery.throttle-debounce|rights=hidden]|spriteEdit.js|spriteEdit.css
