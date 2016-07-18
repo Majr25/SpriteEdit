@@ -737,13 +737,11 @@ var create = function( state ) {
 		$toolbox.on( 'change.spriteEdit', function() {
 			tool = $toolbox.val();
 			$root.addClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
-			$doc.find( '.spritedoc-name' ).find( 'code' ).attr( 'contenteditable', false );
 			
 			switch ( tool ) {
 				case 'deprecate':
-					$doc.on( 'click' + toolNamespace + 'Deprecate', '.spritedoc-name > code', function( e ) {
+					$doc.on( 'click' + toolNamespace + 'Deprecate', '.spritedoc-name > code', function() {
 						change( 'toggle deprecation', { $elem: $( this ) } );
-						e.preventDefault();
 					} );
 				break;
 			}
@@ -756,7 +754,6 @@ var create = function( state ) {
 			
 			$toolbox.val( '' );
 			$doc.off( '.spriteEditTool' );
-			$doc.find( '.spritedoc-name' ).find( 'code' ).attr( 'contenteditable', true );
 			$root.removeClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
 			tool = null;
 			
@@ -1024,6 +1021,11 @@ var create = function( state ) {
 		
 		$doc.on( 'focus.spriteEdit', '[contenteditable]', function() {
 			var $this = $( this );
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				$this.blur();
+				return;
+			}
+			
 			var text = $this.text();
 			$this.attr( 'data-original-text', text );
 			
@@ -1040,6 +1042,10 @@ var create = function( state ) {
 			}
 		} );
 		$doc.on( 'blur.spriteEdit', '[contenteditable]', function() {
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				return;
+			}
+			
 			var $this = $( this );
 			var text = $this.text();
 			var trimmedText = $.trim( text ).replace( /  +/g, ' ' );
