@@ -9,6 +9,7 @@ var i18n = {
 	changesSavedNotice: 'Your changes were saved.',
 	controlNewName: 'New name',
 	ctxDeleteImage: 'Delete image',
+	ctxDownloadImage: 'Download image',
 	ctxReplaceImage: 'Replace image',
 	diffError: 'Failed to retrieve diff',
 	diffErrorMissingPage: 'Failed to retrieve page',
@@ -1221,6 +1222,43 @@ var create = function( state ) {
 										} );
 									} );
 								} ).click();
+						}
+					} ),
+					makeButton( i18n.ctxDownloadImage, {
+						css: {
+							display: 'block',
+							width: '100%'
+						},
+						action: function() {
+							$( this ).blur();
+							
+							var url;
+							var $box = $parent.parent();
+							// Already an image, just pass on the URL
+							if ( $box.hasClass( 'spriteedit-new' ) ) {
+								url = $parent.find( '> img' ).attr( 'src' );
+							} else {
+								// Individual sprite needs to be extracted from the spritesheet
+								var width = settings.imageWidth;
+								var height = settings.imageHeight;
+								var posPx = posToPx( $box.data( 'pos' ) );
+								var imgCanv = getCanvas( 'image' );
+								
+								imgCanv.clear();
+								imgCanv.ctx.drawImage( spritesheet,
+									posPx.left, posPx.top, width, height,
+									0, 0, width, height
+								);
+								
+								url = imgCanv.canvas.toDataURL();
+							}
+							
+							var dlLink = $( '<a>' ).attr( {
+								href: url,
+								download: $box.data( 'sort-key' ) + '.png'
+							} ).appendTo( 'body' );
+							dlLink[0].click();
+							dlLink.remove();
 						}
 					} ),
 					makeButton( i18n.ctxDeleteImage, {
