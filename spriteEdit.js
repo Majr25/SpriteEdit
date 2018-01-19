@@ -174,7 +174,7 @@ var create = function( state ) {
 				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
 			$doc.data( 'original-url', settings.sheet );
 		}
-		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + new Date().getTime();
+		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + Date.now();
 		
 		// Replace the spritesheet with a fresh uncached one to ensure
 		// we don't save over it with an old version.
@@ -1049,7 +1049,7 @@ var create = function( state ) {
 			
 			var $this = $( this );
 			var text = $this.text();
-			var trimmedText = $.trim( text ).replace( /  +/g, ' ' );
+			var trimmedText = text.trim().replace( /  +/g, ' ' );
 			var origText = $this.attr( 'data-original-text' );
 			$this.removeAttr( 'data-original-text' ).off( 'keypress.spriteEdit' );
 			
@@ -2048,7 +2048,7 @@ var create = function( state ) {
 			}
 			
 			var $newBox = $boxTemplate.clone();
-			$newBox.find( 'code' ).text( $.trim( this.name ).replace( /\.[^\.]+$/, '' ) );
+			$newBox.find( 'code' ).text( this.name.trim().replace( /\.[^\.]+$/, '' ) );
 			scaleImage( this ).done( function( $img ) {
 				$newBox.find( '.spritedoc-image' ).html( $img );
 			} );
@@ -2192,7 +2192,7 @@ var create = function( state ) {
 			).appendTo( $overlay );
 		}
 		
-		if ( content && !$.isArray( content ) ) {
+		if ( content && !Array.isArray( content ) ) {
 			content = [ content ];
 		}
 		
@@ -2222,7 +2222,7 @@ var create = function( state ) {
 				}
 				
 				var $area = right ? $rightActions : $leftActions;
-				if ( !$.isArray( buttons ) ) {
+				if ( !Array.isArray( buttons ) ) {
 					buttons = [ buttons ];
 				}
 				$.each( buttons, function() {
@@ -2560,7 +2560,7 @@ var create = function( state ) {
 				$ghost = $( this ).parent();
 			}
 			
-			if ( $ghost.find( '.spriteedit-new' ).length && $.trim( $ghost.text() ) === '' ) {
+			if ( $ghost.find( '.spriteedit-new' ).length && $ghost.text().trim() === '' ) {
 				$ghost = $();
 				return;
 			}
@@ -2609,11 +2609,6 @@ var create = function( state ) {
 			}
 			
 			$ghost.parent().mouseenter();
-			
-			// HACK: Fix IE8 selecting things while dragging
-			$( document ).on( 'selectstart', function( e ) {
-				e.preventDefault();
-			} );
 			
 			sorting = true;
 			$root.addClass( 'spriteedit-sorting spriteedit-hidecontrols' );
@@ -2716,9 +2711,6 @@ var create = function( state ) {
 			
 			$placeholder.remove();
 			$ghost = $placeholder = $hover = $hoverParent = $();
-			
-			// Remove IE8 hack
-			$( document ).off( 'selectstart' );
 			
 			sorting = false;
 			$root.removeClass( 'spriteedit-sorting spriteedit-hidecontrols' );
@@ -3398,7 +3390,7 @@ var makeButton = function( text, config ) {
 	var $button = $( '<button>' ).addClass( 'mw-ui-button' );
 	var type = config.type || [];
 	
-	if ( !$.isArray( type ) ) {
+	if ( !Array.isArray( type ) ) {
 		type = [ type ];
 	}
 	$.each( type, function() {
@@ -3509,70 +3501,6 @@ var handleError = function( code, data ) {
 	
 	mw.notify( errorText, { title: errorTitle, type: 'error', autoHide: false } );
 };
-
-
-/** Polyfills **/
-// requestAnimationFrame
-( function() {
-	var vendors = [ 'webkit', 'moz' ];
-	for ( var i = 0; i < vendors.length && !window.requestAnimationFrame; ++i ) {
-		var vp = vendors[i];
-		window.requestAnimationFrame = window[vp + 'RequestAnimationFrame'];
-		window.cancelAnimationFrame = window[vp + 'CancelAnimationFrame'] ||
-			window[vp + 'CancelRequestAnimationFrame'];
-	}
-	if ( !window.requestAnimationFrame || !window.cancelAnimationFrame ) {
-		var lastTime = 0;
-		window.requestAnimationFrame = function( callback ) {
-			var now = +new Date();
-			var nextTime = Math.max( lastTime + 16, now );
-			return setTimeout(
-				function() { callback( lastTime = nextTime ); },
-				nextTime - now
-			);
-		};
-		window.cancelAnimationFrame = clearTimeout;
-	}
-}() );
-
-// Add width and height to Element.getBoundingClientRect() in IE < 8
-if ( window.TextRectangle && !TextRectangle.prototype.width ) {
-	Object.defineProperty( TextRectangle.prototype, 'width', {
-		get: function() { return this.right - this.left; }
-	} );
-	Object.defineProperty( TextRectangle.prototype, 'height', {
-		get: function() { return this.bottom - this.top; }
-	} );
-}
-
-// Element.firstElementChild and Element.nextElementSibling
-if ( !( 'firstElementChild' in $root[0] ) ) {
-	Object.defineProperty( Element.prototype, 'firstElementChild', {
-		get: function() {
-			var el = this.firstChild;
-			while ( el ) {
-				if ( el.nodeType === 1 ) {
-					return el;
-				}
-				el = el.nextSibling;
-			}
-			return null;
-		}
-	} );
-	
-	Object.defineProperty( Element.prototype, 'nextElementSibling', {
-		get: function() {
-			var el = this.nextSibling;
-			while ( el ) {
-				if ( el.nodeType === 1 ) {
-					return el;
-				}
-				el = el.nextSibling;
-			}
-			return null;
-		}
-	} );
-}
 
 
 // Finally start the editor
