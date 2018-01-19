@@ -176,6 +176,9 @@ var create = function( state ) {
 		}
 		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + Date.now();
 		
+		// Cloudfront doesn't allow CORS, so temporarily go through a server that does
+		settings.sheet = 'https://matt-russell.com/cloudfront.php?url=' + encodeURIComponent( settings.sheet );
+		
 		// Replace the spritesheet with a fresh uncached one to ensure
 		// we don't save over it with an old version.
 		// XHR is used instead of a CORS Image so a blob URL can
