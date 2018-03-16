@@ -93,7 +93,7 @@ $( '#ca-spriteedit' ).find( 'a' ).click( function( e ) {
 if ( historySupported ) {
 	$win.on( 'popstate', function() {
 		if (
-			location.search.match( 'spriteaction=edit' ) &&
+			location.search.match( '[?&]spriteaction=edit' ) &&
 			!$root.hasClass( 'spriteedit-loaded' )
 		) {
 			create( 'history' );
@@ -378,7 +378,7 @@ var create = function( state ) {
 	if ( historySupported ) {
 		$win.on( 'popstate.spriteEdit', function() {
 			if (
-				!location.search.match( 'spriteaction=edit' ) &&
+				!location.search.match( '[?&]spriteaction=edit' ) &&
 				$root.hasClass( 'spriteedit-loaded' )
 			) {
 				close( 'history' );
@@ -3121,7 +3121,7 @@ var create = function( state ) {
 		if ( !leaveUrl ) {
 			if ( historySupported ) {
 				history.pushState( {}, '', mw.util.getUrl() );
-			} else if ( location.search.match( 'spriteaction=edit' ) ) {
+			} else if ( location.search.match( '[?&]spriteaction=edit' ) ) {
 				location = mw.util.getUrl();
 			}
 		}
