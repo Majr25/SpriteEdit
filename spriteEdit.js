@@ -573,15 +573,7 @@ var create = function( state ) {
 			},
 			autoSort: true,
 			sortStart: collapseBoxes,
-			sortEnd: expandBoxes
-		} );
-		makeSortable( {
-			selectors: {
-				container: '.spritedoc-box',
-				parent: '.spritedoc-names',
-				elem: '.spritedoc-name'
-			},
-			autoSort: true
+			sortEnd: expandBoxes,
 		} );
 		
 		// Create toolbar
@@ -3402,8 +3394,7 @@ var addControls = function( $elems, type ) {
 			addControls( $elems.find( '.spritedoc-name' ), 'name' );
 		break;
 		case 'name':
-			$elems.prepend( $( '<span>' ).addClass( 'spriteedit-handle' ) )
-				.find( 'code' ).attr( 'contenteditable', true );
+			$elems.find( 'code' ).attr( 'contenteditable', true );
 		break;
 	}
 };

@@ -174,14 +174,6 @@
 	-webkit-transition-delay: 200ms;
 	        transition-delay: 200ms;
 }
-.spritedoc-box:hover .spritedoc-name > .spriteedit-handle {
-	opacity: 0.5;
-}
-.spritedoc-box .spritedoc-name:hover > .spriteedit-handle {
-	opacity: 1;
-	-webkit-transition-delay: 0s;
-	        transition-delay: 0s;
-}
 
 #spritedoc [contentEditable]:empty:after {
 	content: "\A0"; /* Non-breaking space */
