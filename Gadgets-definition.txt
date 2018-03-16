@@ -1,2 +1,2 @@
 * spriteEditLoader[ResourceLoader|default|dependencies=mediawiki.notification,mediawiki.util]|spriteEditLoader.js
-* spriteEdit[ResourceLoader|type=general|hidden|dependencies=jquery.throttle-debounce,mediawiki.api,mediawiki.confirmCloseWindow,mediawiki.util,oojs-ui-core,user.options]|spriteEdit.js|spriteEdit.css
+* spriteEdit[ResourceLoader|type=general|hidden|dependencies=jquery.throttle-debounce,mediawiki.api,mediawiki.confirmCloseWindow,mediawiki.util,oojs-ui-core]|spriteEdit.js|spriteEdit.css

@@ -2038,7 +2038,7 @@ var create = function( state ) {
 							} } }
 						);
 						
-						names.setTable( conflictPanel.$text.find( 'textarea:first' ).val() );
+						names.setTable( $( '#spriteedit-ec-curText' ).data( 'ooui-object' ).getValue() );
 						names.getDiff().then( function( diff ) {
 							changesPanel.clean();
 							
@@ -2063,14 +2063,17 @@ var create = function( state ) {
 						}
 						$button.blur().addClass( 'spriteedit-processing' );
 						
-						names.setTable( conflictPanel.$text.find( 'textarea:first' ).val() );
-					}
-				} }
 						saveChanges( $( '#spriteedit-summary' ).data( 'ooui-object' ).getValue(), true );
+						names.setTable( $( '#spriteedit-ec-curText' ).data( 'ooui-object' ).getValue() );
+					},
+				} },
 			},
 			function() {
 				this.$actions.find( 'button' ).removeClass( 'spriteedit-processing' );
-			}
+				
+				var $textarea = this.$text.find( 'textarea' );
+				$textarea.css( 'max-height', ( this.$text.height() - $textarea.parent()[0].offsetTop ) + 'px' );
+			},
 		);
 		
 		$.when(
@@ -2080,27 +2083,37 @@ var create = function( state ) {
 				return revisionsApi.get( { pageids: idsPageId } );
 			} )
 		).then( function( table, diff, curTextData ) {
-			var opt = mw.user.options.get( [ 'rows', 'cols' ] );
-			var $textbox = $( '<textarea>' ).addClass( 'mw-ui-input' ).prop( {
-				rows: opt.rows,
-				cols: opt.cols
+			// TODO: Change to MultilineTextInputWidget on MW 1.30
+			var curEditbox = new OO.ui.TextInputWidget( {
+				id: 'spriteedit-ec-curText',
+				multiline: true,
+				value: curTextData[0].query.pages[idsPageId].revisions[0]['*'],
 			} );
+			curEditbox.$element.data( 'ooui-object', curEditbox );
+			var oldEditbox = new OO.ui.TextInputWidget( {
+				id: 'spriteedit-ec-oldText',
+				multiline: true,
+				readOnly: true,
+				value: table,
+			} );
+			oldEditbox.$element.data( 'ooui-object', oldEditbox );
 			
 			var $curText = $( '<div>' ).append(
-				$textbox.clone().val( curTextData.query.pages[idsPageId].revisions[0]['*'] )
+				$( '<p>' ).text( i18n.panelConflictCurText ),
+				curEditbox.$element
 			);
 			var $oldText = $( '<div>' ).append(
-				$textbox.clone().prop( 'readonly', true ).val( table )
+				$( '<p>' ).text( i18n.panelConflictYourText ),
+				oldEditbox.$element
 			);
 			
-			var $diff = $( '<div>' ).append( diff );
-			
-			conflictPanel.$text
-				.append( $( '<p>' ).text( i18n.panelConflictCurText ) )
-				.append( $curText )
-				.append( $diff )
-				.append( $( '<p>' ).text( i18n.panelConflictYourText ) )
-				.append( $oldText );
+			conflictPanel.$text.append(
+				$( '<div>' ).addClass( 'spriteedit-ec-editboxes' ).append(
+					$curText,
+					$oldText
+				),
+				diff
+			);
 			
 			conflictPanel.show();
 		}, function( code, data ) {

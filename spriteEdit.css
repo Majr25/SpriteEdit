@@ -397,3 +397,20 @@
 .spriteedit-old-sheet {
 	background-color: #FEEEC8;
 }
+
+.spriteedit-ec-editboxes {
+	display: flex;
+	flex-wrap: wrap;
+}
+.spriteedit-ec-editboxes > div {
+	flex-grow: 1;
+	margin: 0 1em;
+}
+.spriteedit-ec-editboxes .oo-ui-textInputWidget {
+	min-width: 30em;
+	max-width: none;
+}
+.spriteedit-ec-editboxes .oo-ui-textInputWidget > .oo-ui-inputWidget-input {
+	min-height: 20em;
+	height: 200em;
+}
