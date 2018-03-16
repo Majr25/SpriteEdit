@@ -125,6 +125,7 @@ var create = function( state ) {
 	var usedNames = {};
 	var loadingImages = [];
 	var panels = {};
+	var canTag = null;
 	var revisionsApi = new mw.Api( { parameters: {
 		action: 'query',
 		prop: 'revisions',
@@ -332,6 +333,11 @@ var create = function( state ) {
 			
 			if ( !canEdit ) {
 				mw.notify( i18n.noPermissionNotice, { type: 'error', autoHide: false } );
+			}
+			
+			/* User doesn't have the right to apply change tags */
+			if ( rights.indexOf( 'applychangetags' ) === -1 ) {
+				canTag = false;
 			}
 		}
 		
@@ -678,6 +684,15 @@ var create = function( state ) {
 				scroll( 0, barTop + $win.scrollTop() + 1 );
 			}
 		} );
+		
+		// Check the editor's change tag exists
+		// Since the tag isn't important, we don't wait for the request to finish
+		// If it isn't done by the time we try to save, we assume we can't tag
+		if ( canTag !== false ) {
+			findChangeTag( 'spriteeditor' ).then( function( result ) {
+				canTag = result;
+			} );
+		}
 		
 		
 		/** Bind events **/
@@ -1601,14 +1616,15 @@ var create = function( state ) {
 					return retryableRequest( function() {
 						return new mw.Api( {
 							ajax: { contentType: 'multipart/form-data' }
-						} ).postWithToken( 'edit', {
+						} ).postWithToken( 'csrf', {
 							action: 'edit',
 							nocreate: true,
 							pageid: idsPageId,
 							text: table,
 							basetimestamp: $doc.data( 'idstimestamp' ),
 							summary: summary,
-							utf8: true
+							tags: canTag ? 'spriteeditor' : undefined,
+							utf8: true,
 						} );
 					} );
 				} ).then( deferred.resolve, function( code, data ) {
@@ -1777,7 +1793,7 @@ var create = function( state ) {
 					return retryableRequest( function() {
 						return new mw.Api( {
 							ajax: { contentType: 'multipart/form-data' }
-						} ).postWithToken( 'edit', {
+						} ).postWithToken( 'csrf', {
 							action: 'upload',
 							stash: true,
 							ignorewarnings: true,
@@ -1812,12 +1828,13 @@ var create = function( state ) {
 				sheet.stash().then( function( key ) {
 					// TODO: Check if upload actually succeeded on failure
 					return retryableRequest( function() {
-						return new mw.Api().postWithToken( 'edit', {
+						return new mw.Api().postWithToken( 'csrf', {
 							action: 'upload',
 							ignorewarnings: true,
 							comment: summary,
 							filename: $doc.data( 'spritesheet' ),
-							filekey: key
+							filekey: key,
+							tags: canTag ? 'spriteeditor' : undefined,
 						} );
 					} );
 				} ).then( deferred.resolve, function( code, data ) {
@@ -1869,7 +1886,7 @@ var create = function( state ) {
 				
 				// Purge this page so the changes show up immediately
 				retryableRequest( function() {
-					return new mw.Api().get( {
+					return new mw.Api().post( {
 						action: 'purge',
 						pageids: mw.config.get( 'wgArticleId' )
 					} );
@@ -3503,6 +3520,43 @@ var handleError = function( code, data ) {
 	}
 	
 	mw.notify( errorText, { title: errorTitle, type: 'error', autoHide: false } );
+};
+
+/**
+ * Looks for the specified change tag
+ * 
+ * Returns a promise which resolves to a boolean stating if the tag is active or not,
+ * or null if the tag doesn't exist.
+ * 
+ * "tag" is the tag to search for.
+ * "options" is an object of additional values to add to the request.
+ */
+var findChangeTag = function( tag, options ) {
+	return retryableRequest( function() {
+		return new mw.Api().get( $.extend( {
+			action: 'query',
+			list: 'tags',
+			tgprop: 'active',
+			tglimit: 'max',
+			formatversion: 2,
+		}, options || {} ) );
+	} ).then( function( data ) {
+		var foundActive = null;
+		$.each( data.query.tags, function() {
+			if ( this.name === tag ) {
+				foundActive = this.active;
+				return false;
+			}
+		} );
+		
+		// XXX: MW JS requires ES5 support, but JavascriptMinifier doesn't
+		// support ES5, so these have to remain strings. See T96901
+		if ( foundActive === null && data['continue'] ) {
+			return findChangeTag( tag, data['continue'] );
+		}
+		
+		return foundActive;
+	} );
 };
 
 
