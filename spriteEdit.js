@@ -8,9 +8,9 @@ var i18n = {
 	browserActionNotSupported: 'Not supported by your browser.',
 	changesSavedNotice: 'Your changes were saved.',
 	controlNewName: 'New name',
-	ctxDeleteImage: 'Delete image',
-	ctxDownloadImage: 'Download image',
-	ctxReplaceImage: 'Replace image',
+	ctxDeleteImage: 'Delete',
+	ctxDownloadImage: 'Download',
+	ctxReplaceImage: 'Replace',
 	diffError: 'Failed to retrieve diff',
 	diffErrorMissingPage: 'Failed to retrieve page',
 	dupeName: 'This name already exists.',
@@ -55,6 +55,7 @@ var i18n = {
 	toolbarReviewChanges: 'Review changes',
 	toolbarSave: 'Save',
 	toolbarSummaryPlaceholder: 'Summarize the changes you made',
+	toolbarSummaryLabelTip: 'The number of bytes remaining',
 	toolbarToolDeprecate: 'Deprecate',
 	toolbarToolDeprecateTip: 'Toggle names as deprecated',
 	toolbarTools: 'Tools',
@@ -80,6 +81,9 @@ var pointerEventsSupported = $.client.profile().name !== 'msie' || $.client.prof
 var idsPageId = $doc.data( 'idspage' );
 var originalTitle = document.title;
 
+
+// Start loading OOUI's icons in the background
+mw.loader.load( [ 'oojs-ui.styles.icons-content', 'oojs-ui.styles.icons-editing-advanced', 'oojs-ui.styles.icons-media', 'oojs-ui.styles.icons-moderation' ] );
 
 // Handle recreating the editor
 $( '#ca-spriteedit' ).find( 'a' ).click( function( e ) {
@@ -161,7 +165,7 @@ var create = function( state ) {
 	addControls( $boxTemplate, 'box' );
 	
 	// Pre-load modules which will be needed later
-	var saveModules = mw.loader.using( [ 'jquery.byteLimit', 'mediawiki.action.history.diff', 'mediawiki.ui.input' ] );
+	var saveModules = mw.loader.using( [ 'jquery.byteLimit', 'mediawiki.action.history.diff' ] );
 	
 	$root.addClass( 'spriteedit-loaded' );
 	
@@ -587,80 +591,77 @@ var create = function( state ) {
 			marginLeft: '-' + contentPadding.left,
 			marginRight: '-' + contentPadding.right
 		} );
+		var undoButton = new OO.ui.ButtonInputWidget( {
+			id: 'spriteedit-undo',
+			icon: 'undo',
+			label: i18n.toolbarUndo,
+			disabled: true,
+		} );
+		undoButton.$element.data( 'ooui-object', undoButton );
+		
+		var redoButton = new OO.ui.ButtonInputWidget( {
+			id: 'spriteedit-redo',
+			icon: 'redo',
+			label: i18n.toolbarRedo,
+			disabled: true,
+		} );
+		redoButton.$element.data( 'ooui-object', redoButton );
+		
+		var newSectionButton = new OO.ui.ButtonInputWidget( {
+			id: 'spriteedit-add-section',
+			icon: 'tableAddRowAfter',
+			label: i18n.toolbarNewSection,
+		} );
+		newSectionButton.$element.data( 'ooui-object', newSectionButton );
+		
+		var newImageButton = new OO.ui.ButtonInputWidget( {
+			id: 'spriteedit-add-image',
+			icon: 'imageAdd',
+			label: i18n.toolbarNewImage,
+		} );
+		newImageButton.$element.data( 'ooui-object', newImageButton );
+		
+		var saveButton = new OO.ui.ButtonInputWidget( {
+			id: 'spriteedit-save',
+			flags: [ 'progressive', 'primary' ],
+			icon: 'expand',
+			label: i18n.toolbarSave,
+			disabled: true,
+		} );
+		saveButton.$element.data( 'ooui-object', saveButton ).css( 'right', contentPadding.right );
+		
+		var toolboxSelect = new OO.ui.DropdownWidget( {
+			id: 'spriteedit-toolbox',
+			label: i18n.toolbarTools,
+			$overlay: $doc,
+		} );
+		toolboxSelect.$element.data( 'ooui-object', toolboxSelect );
+		
 		$toolbar.append(
-			$( '<span>' ).addClass( 'mw-ui-button-group' ).append(
-				makeButton( i18n.toolbarUndo, {
-					id: 'spriteedit-undo',
-					props: { disabled: true },
-					action: function() {
-						$( this ).blur();
-						
-						var hist = changes.pop();
-						revert( hist );
-						undoneChanges.push( hist );
-						$( '#spriteedit-redo' ).prop( 'disabled', false );
-					}
-				} ),
-				makeButton( i18n.toolbarRedo, {
-					id: 'spriteedit-redo',
-					props: { disabled: true },
-					action: function() {
-						$( this ).blur();
-						
-						var hist = undoneChanges.pop();
-						$.each( hist, function() {
-							change( this.action, this.content, false, true );
-						} );
-						changes.push( hist );
-						
-						if ( !undoneChanges.length ) {
-							$( this ).prop( 'disabled', true );
-						}
-						
-						$.each( [
-							'#spriteedit-undo',
-							'#spriteedit-save',
-							'#spriteedit-summary',
-							'#spriteedit-review-button'
-						], function() {
-							$( this ).prop( 'disabled', false );
-						} );
-					}
-				} )
-			),
-			$( '<span>' ).addClass( 'mw-ui-button-group' ).append(
-				makeButton( i18n.toolbarNewSection, { id: 'spriteedit-add-section' } ),
-				makeButton( i18n.toolbarNewImage, { id: 'spriteedit-add-image' } )
-			),
-			$( '<select>' ).prop( 'id', 'spriteedit-toolbox' ).addClass( 'mw-ui-button' ).append(
-				$( '<option>' ).prop( {
-					disabled: true,
-					selected: true,
-					value: ''
-				} ).css( 'display', 'none' ).text( i18n.toolbarTools )
-			),
-			makeButton( i18n.toolbarSave, {
-				id: 'spriteedit-save',
-				type: 'progressive',
-				props: { disabled: true },
-				css: { right: contentPadding.right }
-			} )
+			new OO.ui.ButtonGroupWidget( {
+				items: [ undoButton, redoButton ],
+			} ).$element,
+			new OO.ui.ButtonGroupWidget( {
+				items: [ newSectionButton, newImageButton ],
+			} ).$element,
+			toolboxSelect.$element,
+			saveButton.$element
 		);
 		if ( !imageEditingSupported ) {
-			$toolbar.find( '#spriteedit-add-image' ).prop( {
-				disabled: true,
-				title: i18n.browserActionNotSupported
-			} ).css( 'cursor', 'help' );
+			newImageButton.setDisabled( true ).$element
+				.prop( 'title', i18n.browserActionNotSupported )
+				.css( 'cursor', 'help' );
 		}
 		
 		// Create tools
 		var $toolbox = $toolbar.find( '#spriteedit-toolbox' );
-		$toolbox.append(
-			$( '<option>' ).prop( {
-				value: 'deprecate',
-				title: i18n.toolbarToolDeprecateTip
-			} ).text( i18n.toolbarToolDeprecate )
-		);
+		var deprecateOption = new OO.ui.MenuOptionWidget( {
+			data: 'deprecate',
+			label: i18n.toolbarToolDeprecate,
+			icon: 'flag',
+		} );
+		deprecateOption.$element.prop( 'title', i18n.toolbarToolDeprecateTip );
+		toolboxSelect.getMenu().addItems( [ deprecateOption ] );
 		
 		var $barContainer = $( '<div>' ).addClass( 'spriteedit-toolbar-container' )
 			.append( $toolbar ).prependTo( $doc );
@@ -727,8 +728,57 @@ var create = function( state ) {
 			} ) );
 		}
 		
-		$( '#spriteedit-add-section' ).on( 'click.spriteEdit', function() {
-			$( this ).blur();
+		$( '#spriteedit-undo' ).find( 'button' ).on( 'click.spriteEdit', function() {
+			$( this ).focus().blur();
+			
+			// We're not meant to be editing
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				return;
+			}
+			
+			var hist = changes.pop();
+			revert( hist );
+			undoneChanges.push( hist );
+			redoButton.setDisabled( false );
+		} );
+		
+		$( '#spriteedit-redo' ).find( 'button' ).on( 'click.spriteEdit', function() {
+			$( this ).focus().blur();
+			
+			// We're not meant to be editing
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				return;
+			}
+			
+			var hist = undoneChanges.pop();
+			$.each( hist, function() {
+				change( this.action, this.content, false, true );
+			} );
+			changes.push( hist );
+			
+			if ( !undoneChanges.length ) {
+				redoButton.setDisabled( true );
+			}
+			
+			$.each( [
+				'#spriteedit-undo',
+				'#spriteedit-save',
+				'#spriteedit-summary',
+				'#spriteedit-review-button',
+			], function() {
+				if ( $( this ).length ) {
+					$( this ).data( 'ooui-object' ).setDisabled( false );
+				}
+			} );
+		} );
+		
+		$( '#spriteedit-add-section' ).find( 'button' ).on( 'click.spriteEdit', function() {
+			$( this ).focus().blur();
+			
+			// We're not meant to be editing
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				return;
+			}
 			
 			var $newHeading = $headingTemplate.clone();
 			change( 'insert', {
@@ -743,7 +793,14 @@ var create = function( state ) {
 			$newHeading.find( '.mw-headline' ).focus();
 		} );
 		
-		$( '#spriteedit-add-image' ).on( 'click.spriteEdit', function() {
+		$( '#spriteedit-add-image' ).find( 'button' ).on( 'click.spriteEdit', function() {
+			$( this ).focus().blur();
+			
+			// We're not meant to be editing
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				return;
+			}
+			
 			$( '<input type="file">' )
 				.attr( {
 					accept: 'image/*',
@@ -752,17 +809,34 @@ var create = function( state ) {
 				.one( 'change.spriteEdit', function() {
 					insertSprites( this.files );
 				} ).click();
-			
-			$( this ).blur();
 		} );
 		
 		// Toolbox functions
+		// Modify click event to not open menu when we're not meant to be editing,
+		// or a tool is already selected
+		toolboxSelect.origOnClick = toolboxSelect.onClick;
+		toolboxSelect.onClick = function( e ) {
+			if ( $root.hasClass( 'spriteedit-hidecontrols' ) ) {
+				this.$handle.blur();
+				return;
+			}
+			
+			toolboxSelect.origOnClick.call( toolboxSelect, e );
+		};
+		toolboxSelect.$handle.off( 'click' ).on( 'click', toolboxSelect.onClick.bind( toolboxSelect ) );
+		
+		toolboxSelect.on( 'labelChange', function() {
+			if ( !toolboxSelect.getLabel() ) {
+				toolboxSelect.setLabel( i18n.toolbarTools );
+			}
+		} );
+		
 		var toolNamespace = '.spriteEdit.spriteEditTool.spriteEditTool';
 		var tool;
 		// Bind events for each tool's function
-		$toolbox.on( 'change.spriteEdit', function() {
-			tool = $toolbox.val();
-			$root.addClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
+		toolboxSelect.getMenu().on( 'choose', function( item ) {
+			tool = item.getData();
+			$root.addClass( 'spriteedit-hidecontrols spriteedit-tool spriteedit-tool-' + tool );
 			
 			switch ( tool ) {
 				case 'deprecate':
@@ -774,34 +848,24 @@ var create = function( state ) {
 		} );
 		// Clear tool when clicking a toolbar button, the toolbox itself, or pressing escape
 		var clearTool = function( e ) {
-			if ( !$toolbox.val() ) {
+			if ( !$root.hasClass( 'spriteedit-tool' ) ) {
 				return;
 			}
-			
-			$toolbox.val( '' );
+			toolboxSelect.getMenu().selectItem();
 			$doc.off( '.spriteEditTool' );
-			$root.removeClass( 'spriteedit-hidecontrols spriteedit-tool-' + tool );
+			$root.removeClass( 'spriteedit-hidecontrols spriteedit-tool spriteedit-tool-' + tool );
 			tool = null;
-			
-			// If clicking on the toolbox itself
-			if ( e ) {
-				e.preventDefault();
-				$toolbox.blur();
-				$win.focus();
-			}
 		};
 		$toolbar.on( 'mouseup.spriteEdit', 'button', function() {
 			clearTool();
 		} );
-		$toolbox.on( 'mousedown.spriteEdit', function( e ) {
-			if ( e.which == 1 && $toolbox.is( e.target ) ) {
-				clearTool( e );
-			}
+		$toolbox.on( 'click.spriteEdit', function() {
+			clearTool();
 		} );
 		$( document ).on( 'keydown.spriteEdit', function( e ) {
 			// Esc
 			if ( e.keyCode === 27 ) {
-				clearTool( e );
+				clearTool();
 			}
 		} );
 		
@@ -886,9 +950,9 @@ var create = function( state ) {
 			} );
 		}
 		
-		$( '#spriteedit-save' ).on( 'click.spriteEdit', function() {
+		$( '#spriteedit-save' ).find( 'button' ).on( 'click.spriteEdit', function() {
 			var $button = $( this );
-			$button.blur();
+			$button.focus().blur();
 			
 			// Prevent saving and notify if there are duplicate names
 			if ( $doc.find( '.spriteedit-dupe' ).length ) {
@@ -915,7 +979,7 @@ var create = function( state ) {
 					return;
 				}
 				
-				saveChanges( $( '#spriteedit-summary' ).val() );
+				saveChanges( $( '#spriteedit-summary' ).data( 'ooui-object' ).getValue() );
 				
 				return;
 			}
@@ -923,22 +987,31 @@ var create = function( state ) {
 			saveModules.done( function() {
 				$toolbar.addClass( 'spriteedit-saveform-open' );
 				$button
-					.addClass( 'mw-ui-constructive' )
-					.removeClass( 'mw-ui-progressive spriteedit-processing' )
+					.removeClass( 'spriteedit-processing' )
 					// Prevent accidental double-click saving
 					.css( 'pointer-events', 'none' );
 				
+				$button.parent().data( 'ooui-object' ).setIcon( 'check' );
+				
 				if ( !$toolbar.find( '#spriteedit-saveform' ).length ) {
+					var summaryInput = new OO.ui.TextInputWidget( {
+						id: 'spriteedit-summary',
+						name: 'wpSummary',
+						spellcheck: true,
+						placeholder: i18n.toolbarSummaryPlaceholder,
+						maxLength: 255,
+						label: '255',
+					} );
+					summaryInput.$element.data( 'ooui-object', summaryInput );
+					summaryInput.$label.prop( 'title', i18n.toolbarSummaryLabelTip );
+					summaryInput.on( 'change', function( value ) {
+						summaryInput.setLabel( String( 255 - $.byteLength( value ) ) );
+					} );
 					$( '<div>' )
 						.attr( 'id', 'spriteedit-saveform' )
 						.css( 'margin-right', $( '#spriteedit-save' )[0].getBoundingClientRect().width )
 						.append(
-							$( '<input type="text">' ).addClass( 'mw-ui-input' ).attr( {
-								id: 'spriteedit-summary',
-								name: 'wpSummary', // For autocomplete
-								placeholder: i18n.toolbarSummaryPlaceholder,
-								spellcheck: true
-							} ).byteLimit( 255 ),
+							summaryInput.$element,
 							makeButton( i18n.toolbarReviewChanges, { id: 'spriteedit-review-button' } )
 					).appendTo( $toolbar );
 				}
@@ -951,7 +1024,7 @@ var create = function( state ) {
 					.transitionEnd( function() {
 						$button.css( 'pointer-events', '' );
 						$barContainer.height( openedToolbarHeight );
-						$( '#spriteedit-summary' ).focus();
+						$( '#spriteedit-summary' ).data( 'ooui-object' ).focus();
 						
 						// Do this after the transition so there is no stutter
 						names.getDiff();
@@ -967,16 +1040,16 @@ var create = function( state ) {
 			}
 			
 			$( this ).blur();
-			$( '#spriteedit-save' ).click();
+			$( '#spriteedit-save' ).find( 'button' ).click();
 			e.preventDefault();
 		} );
 		
-		$doc.on( 'click.spriteEdit', '#spriteedit-review-button', function() {
+		$doc.on( 'click.spriteEdit', '#spriteedit-review-button > button', function() {
 			var $button = $( this );
 			if ( $button.hasClass( 'spriteedit-processing' ) ) {
 				return;
 			}
-			$button.blur().addClass( 'spriteedit-processing' );
+			$button.focus().blur().addClass( 'spriteedit-processing' );
 			
 			var changesPanel = panels.changes || panel(
 				'changes',
@@ -1062,7 +1135,9 @@ var create = function( state ) {
 						'#spriteedit-summary',
 						'#spriteedit-review-button'
 					], function() {
-						$( this ).prop( 'disabled', false );
+						if ( $( this ).length ) {
+							$( this ).data( 'ooui-object' ).setDisabled( false )
+						}
 					} );
 				} );
 			}
@@ -1133,7 +1208,9 @@ var create = function( state ) {
 						'#spriteedit-summary',
 						'#spriteedit-review-button'
 					], function() {
-						$( this ).prop( 'disabled', true );
+						if ( $( this ).length ) {
+							$( this ).data( 'ooui-object' ).setDisabled( true );
+						}
 					} );
 				}
 				
@@ -1226,14 +1303,9 @@ var create = function( state ) {
 				
 				tooltip( $parent, [
 					makeButton( i18n.ctxReplaceImage, {
-						type: 'progressive',
-						css: {
-							display: 'block',
-							width: '100%'
-						},
+						type: [ 'progressive', 'primary' ],
+						icon: 'imageGallery',
 						action: function() {
-							$( this ).blur();
-							
 							$( '<input type="file">' )
 								.attr( 'accept', 'image/*' )
 								.one( 'change', function() {
@@ -1250,13 +1322,8 @@ var create = function( state ) {
 						}
 					} ),
 					makeButton( i18n.ctxDownloadImage, {
-						css: {
-							display: 'block',
-							width: '100%'
-						},
+						icon: 'download',
 						action: function() {
-							$( this ).blur();
-							
 							var url;
 							var $box = $parent.parent();
 							// Already an image, just pass on the URL
@@ -1287,11 +1354,8 @@ var create = function( state ) {
 						}
 					} ),
 					makeButton( i18n.ctxDeleteImage, {
-						type: 'destructive',
-						css: {
-							display: 'block',
-							width: '100%'
-						},
+						type: [ 'destructive', 'primary' ],
+						icon: 'trash',
 						action: function() {
 							tooltip.hide( function() {
 								var $box = $parent.parent();
@@ -1303,7 +1367,7 @@ var create = function( state ) {
 							} );
 						}
 					} )
-				], true );
+				], { horizontal: true, class: 'spriteedit-tooltip-controls' } );
 			} );
 		}
 		
@@ -1356,7 +1420,7 @@ var create = function( state ) {
 	 * "state" is what triggered the editor to close (e.g. from history navigation)
 	 */
 	var close = function( state ) {
-		if ( !$root.hasClass( 'spriteedit-enabled' ) || $( '#spriteedit-save' ).is( '[disabled]' ) ) {
+		if ( !$root.hasClass( 'spriteedit-enabled' ) || $( '#spriteedit-save' ).data( 'ooui-object' ).isDisabled() ) {
 			destroy( true, state === 'history' );
 		} else {
 			var discardPanel = panels.discard || panel(
@@ -1370,7 +1434,8 @@ var create = function( state ) {
 						}
 					} },
 					{ text: i18n.panelDiscardDiscard, config: {
-						type: 'destructive',
+						type: [ 'destructive', 'primary' ],
+						icon: 'trash',
 						action: function() {
 							discardPanel.hide( function() {
 								destroy( true, state === 'history' );
@@ -1872,6 +1937,9 @@ var create = function( state ) {
 	 * to be reparsed after saving (e.g. in the event of an edit conflict).
 	 */
 	var saveChanges = function( summary, refresh ) {
+		// No more editing
+		$root.addClass( 'spriteedit-hidecontrols' );
+		
 		var idsEdit, sheetEdit;
 		if ( names.modified ) {
 			// Wait for image upload before uploading text
@@ -1934,8 +2002,11 @@ var create = function( state ) {
 	 * "code" and "data" are the standard variables returned by a mw.Api promise rejection.
 	 */
 	var handleSaveError = function( code, data ) {
+		// Allow editing again
+		$root.removeClass( 'spriteedit-hidecontrols' );
+		$( '#spriteedit-save' ).find( 'button' ).removeClass( 'spriteedit-processing' );
+		
 		if ( code !== 'editconflict' ) {
-			$( '#spriteedit-save' ).removeClass( 'spriteedit-processing' );
 			handleError( code, data );
 			return;
 		}
@@ -1960,7 +2031,7 @@ var create = function( state ) {
 							$( '<div>' ).addClass( 'spriteedit-id-changes' ),
 							{ right: { text: i18n.panelEcchangesReturn, config: {
 								id: 'spriteedit-return-edit',
-								type: 'progressive',
+								type: [ 'progressive', 'primary' ],
 								action: function() {
 									conflictPanel.show();
 								}
@@ -1984,7 +2055,7 @@ var create = function( state ) {
 				} },
 				right: { text: i18n.panelConflictSave, config: {
 					id: 'save-conflict',
-					type: 'constructive',
+					type: [ 'progressive', 'primary' ],
 					action: function() {
 						var $button = $( this );
 						if ( $button.hasClass( 'spriteedit-processing' ) ) {
@@ -1993,9 +2064,9 @@ var create = function( state ) {
 						$button.blur().addClass( 'spriteedit-processing' );
 						
 						names.setTable( conflictPanel.$text.find( 'textarea:first' ).val() );
-						saveChanges( $( '#spriteedit-summary' ).val(), true );
 					}
 				} }
+						saveChanges( $( '#spriteedit-summary' ).data( 'ooui-object' ).getValue(), true );
 			},
 			function() {
 				this.$actions.find( 'button' ).removeClass( 'spriteedit-processing' );
@@ -2033,7 +2104,7 @@ var create = function( state ) {
 			
 			conflictPanel.show();
 		}, function( code, data ) {
-			$( '#spriteedit-save' ).removeClass( 'spriteedit-processing' );
+			$( '#spriteedit-save' ).find( 'button' ).removeClass( 'spriteedit-processing' );
 			handleError( code, data );
 		} );
 	};
@@ -2203,9 +2274,10 @@ var create = function( state ) {
 		if ( !$dialog.length ) {
 			$overlay = $( '<div>' ).addClass( 'spriteedit-dialog-overlay' ).css( 'display', 'none' );
 			$dialog = $( '<div>' ).addClass( 'spriteedit-dialog' ).append(
-				makeButton( '×', {
+				makeButton( '', {
 					id: 'spriteedit-dialog-close',
-					props: { title: i18n.panelCloseTip },
+					icon: 'close',
+					title: i18n.panelCloseTip,
 					action: function() {
 						panel().hide();
 					}
@@ -2428,9 +2500,11 @@ var create = function( state ) {
 	 * "$elem" is a jQuery object which the tooltip should be anchored to.
 	 * "content" is the content to go in the tooltip, and can be in whatever format can
 	 * go into jQuery().append (jQuery objects, elements, HTML strings, etc.).
-	 * "horizontal" is a boolean determining if the tooltip should open horizontally or vertically
-	 * relative to its anchor.
-	 * "callback" is a function called once the tooltip finishes its opening animation.
+	 * "config" contains key-value pairs of the following configuration options:
+	 *   "horizontal" is a boolean determining if the tooltip should open horizontally or vertically
+	 *   relative to its anchor.
+	 *   "callback" is a function called once the tooltip finishes its opening animation.
+	 *   "class" is a classname to add to the tooltip
 	 *
 	 * In the tooltip.hide function:
 	 * "callback" is a function called once the tooltip finishes its closing animation.
@@ -2448,7 +2522,8 @@ var create = function( state ) {
 			}
 		} );
 		
-		var func = function( $elem, content, horizontal, callback ) {
+		var func = function( $elem, content, config ) {
+			config = config || {};
 			if ( $tooltip.length ) {
 				if ( $elem.is( $anchor ) ) {
 					func.hide();
@@ -2464,9 +2539,13 @@ var create = function( state ) {
 				$( '<div>' ).addClass( 'spriteedit-tooltip-arrow' )
 			).appendTo( $doc );
 			
+			if ( config.class ) {
+				$tooltip.addClass( config.class );
+			}
+			
 			var anchorPos = $anchor.offset();
 			var docPos = $doc.offset();
-			if ( horizontal ) {
+			if ( config.horizontal ) {
 				$tooltip.addClass( 'spriteedit-tooltip-horizontal' ).css( {
 					top: anchorPos.top - docPos.top + $anchor.outerHeight() / 2,
 					left: anchorPos.left - docPos.left - $tooltip.outerWidth()
@@ -2484,8 +2563,8 @@ var create = function( state ) {
 			} ).transitionEnd( function() {
 				$( this ).removeClass( 'spriteedit-elastic' );
 				
-				if ( callback ) {
-					callback.call( this );
+				if ( config.callback ) {
+					config.callback.call( this );
 				}
 			} );
 		};
@@ -2893,7 +2972,9 @@ var create = function( state ) {
 					'#spriteedit-summary',
 					'#spriteedit-review-button'
 				], function() {
-					$( this ).prop( 'disabled', true );
+					if ( $( this ).length ) {
+						$( this ).data( 'ooui-object' ).setDisabled( true );
+					}
 				} );
 			}
 		};
@@ -2920,7 +3001,7 @@ var create = function( state ) {
 			
 			undoneChanges = [];
 			
-			$( '#spriteedit-redo' ).prop( 'disabled', true );
+			$( '#spriteedit-redo' ).data( 'ooui-object' ).setDisabled( true );
 		}
 		
 		$.each( [
@@ -2929,7 +3010,9 @@ var create = function( state ) {
 			'#spriteedit-summary',
 			'#spriteedit-review-button'
 		], function() {
-			$( this ).prop( 'disabled', false );
+			if ( $( this ).length ) {
+				$( this ).data( 'ooui-object' ).setDisabled( false );
+			}
 		} );
 	};
 	
@@ -3012,7 +3095,9 @@ var create = function( state ) {
 				'#spriteedit-summary',
 				'#spriteedit-review-button'
 			], function() {
-				$( this ).prop( 'disabled', true );
+				if ( $( this ).length ) {
+					$( this ).data( 'ooui-object' ).setDisabled( true );
+				}
 			} );
 		}
 	};
@@ -3126,7 +3211,7 @@ var create = function( state ) {
 		
 		var enabled = $root.hasClass( 'spriteedit-enabled' );
 		
-		$root.removeClass( 'spriteedit-loaded spriteedit-enabled spriteedit-imageeditingenabled' );
+		$root.removeClass( 'spriteedit-loaded spriteedit-enabled spriteedit-imageeditingenabled spriteedit-hidecontrols' );
 		
 		var $viewTab = $( '#ca-view' );
 		$viewTab.add( '#ca-spriteedit' ).toggleClass( 'selected' );
@@ -3385,12 +3470,19 @@ var addControls = function( $elems, type ) {
 				.find( '.mw-headline' ).attr( 'contenteditable', true );
 		break;
 		case 'box':
-			$elems.prepend(
-				$( '<span>' ).addClass( 'spriteedit-handle' ),
-				$( '<span>' ).addClass( 'spriteedit-add-name' ).append(
-					makeButton( i18n.controlNewName, { type: 'progressive' } )
-				)
-			);
+			$elems.each( function(){
+				var addNameButton = new OO.ui.ButtonInputWidget( {
+					classes: [ 'spriteedit-add-name' ],
+					framed: false,
+					icon: 'add',
+					title: i18n.controlNewName,
+				} );
+				addNameButton.$element.data( 'ooui-object', addNameButton );
+				$( this ).prepend(
+					$( '<span>' ).addClass( 'spriteedit-handle' ),
+					addNameButton.$element
+				);
+			} );
 			addControls( $elems.find( '.spritedoc-name' ), 'name' );
 		break;
 		case 'name':
@@ -3400,39 +3492,35 @@ var addControls = function( $elems, type ) {
 };
 
 /**
- * Create a MW UI button element
+ * Create an OOUI button widget
  *
  * "text" is the string displayed on the button.
  * "config" is an object defining various properties of the button:
- * * "type" is a string or array of strings defining the MW UI types
- *   this button should be (e.g.: progressive, destructive, constructive, quiet).
+ * * "type" is a string or array of strings defining the OOUI flags
+ *   this button should use (e.g.: progressive, destructive, primary).
  * * "id" is the id attribute applied to the button.
- * * "props" is an object of properties applied to the button.
- * * "css" is the inline styling applied to the button.
+ * * "icon" is the OOUI icon to use
  * * "action" is a function called when the button is clicked.
  */
 var makeButton = function( text, config ) {
-	var $button = $( '<button>' ).addClass( 'mw-ui-button' );
-	var type = config.type || [];
-	
-	if ( !Array.isArray( type ) ) {
-		type = [ type ];
-	}
-	$.each( type, function() {
-		$button.addClass( 'mw-ui-' + this );
+	var button = new OO.ui.ButtonInputWidget( {
+		flags: config.type,
+		id: config.id,
+		label: text,
+		icon: config.icon,
+		title: config.title,
 	} );
 	
-	if ( config.id ) {
-		$button.prop( 'id', config.id );
+	if ( config.action ) {
+		button.$button.on( 'click.spriteEdit', function( e ) {
+			$( this ).focus().blur();
+			config.action.call( this, e );
+		} );
 	}
 	
-	$button
-		.prop( config.props || {} )
-		.css( config.css || {} )
-		.text( text )
-		.click( config.action );
+	button.$element.data( 'ooui-object', button );
 	
-	return $button;
+	return button.$element;
 };
 
 /**
