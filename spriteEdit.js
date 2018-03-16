@@ -1668,7 +1668,7 @@ var create = function( state ) {
 			 *
 			 * "summary" is the edit summary for the edit.
 			 */
-			save: function( summary ) {
+			save: function( summary, conflict ) {
 				var deferred = makeDeferred( 'save' );
 				if ( !deferred ) {
 					return promises.save;
@@ -1684,7 +1684,10 @@ var create = function( state ) {
 							nocreate: true,
 							pageid: idsPageId,
 							text: table,
-							basetimestamp: $doc.data( 'idstimestamp' ),
+							// If there's already been an edit conflict, just allow the edit
+							// through conflict-free, as it's already annoying enough to
+							// deal with one conflict.
+							basetimestamp: !conflict ? $doc.data( 'idstimestamp' ): undefined,
 							summary: summary,
 							tags: canTag ? 'spriteeditor' : undefined,
 							utf8: true,
@@ -1937,15 +1940,15 @@ var create = function( state ) {
 	 * "refresh" is a boolean, which when true will cause the sprite documentation
 	 * to be reparsed after saving (e.g. in the event of an edit conflict).
 	 */
-	var saveChanges = function( summary, refresh ) {
+	var saveChanges = function( summary, refresh, conflict ) {
 		// No more editing
 		$root.addClass( 'spriteedit-hidecontrols' );
 		
 		var idsEdit, sheetEdit;
 		if ( names.modified ) {
-			// Wait for image upload before uploading text
+			// Wait for image upload before saving text
 			idsEdit = sheet.stash().then( function() {
-				return names.save( summary );
+				return names.save( summary, conflict );
 			} ).then( function( data ) {
 				// Null edit, nothing to do here
 				if ( data.edit.nochange === '' ) {
@@ -2065,8 +2068,8 @@ var create = function( state ) {
 						}
 						$button.blur().addClass( 'spriteedit-processing' );
 						
-						saveChanges( $( '#spriteedit-summary' ).data( 'ooui-object' ).getValue(), true );
 						names.setTable( $( '#spriteedit-ec-curText' ).data( 'ooui-object' ).getValue() );
+						saveChanges( $( '#spriteedit-summary' ).data( 'ooui-object' ).getValue(), true, true );
 					},
 				} },
 			},
@@ -3254,7 +3257,7 @@ var create = function( state ) {
 		
 		$doc.add( $viewTab.find( 'a' ) ).off( '.spriteEdit' );
 		
-		// No furthur cleanup necessary
+		// No further cleanup necessary
 		if ( !enabled ) {
 			return;
 		}
