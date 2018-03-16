@@ -114,6 +114,7 @@ if ( historySupported ) {
  * "state" is what triggered the creation (e.g. from history navigation)
  */
 var create = function( state ) {
+	var preventClose;
 	var settings = {};
 	var mouse = {
 		moved: false,
@@ -703,6 +704,14 @@ var create = function( state ) {
 		
 		/** Bind events **/
 		/* Outside interface events */
+		// Prevent accidentally closing window if changes have been made
+		preventClose = mw.confirmCloseWindow( {
+			namespace: 'spriteEdit',
+			test: function() {
+				return !saveButton.isDisabled();
+			},
+		} );
+		
 		$( '#ca-view' ).find( 'a' ).on( 'click.spriteEdit', function( e ) {
 			close();
 			e.preventDefault();
@@ -1342,12 +1351,6 @@ var create = function( state ) {
 		$win.on( 'scroll.spriteEdit', $.debounce( 250, function() {
 			$root.removeClass( 'spriteedit-smoothscroll' );
 		} ) );
-		
-		$win.on( 'beforeunload.spriteEdit', function( e ) {
-			if ( !$( '#spriteedit-save' ).is( '[disabled]' ) ) {
-				e.preventDefault();
-			}
-		} );
 	};
 	
 	
@@ -3115,6 +3118,9 @@ var create = function( state ) {
 	 */
 	var destroy = function( restore, leaveUrl ) {
 		document.title = originalTitle;
+		
+		// Disable close confirm dialog
+		preventClose.release();
 		
 		$win.add( document ).off( '.spriteEdit' );
 		
