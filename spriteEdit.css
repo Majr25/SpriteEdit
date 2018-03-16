@@ -55,8 +55,8 @@
 }
 .spriteedit-toolbar {
 	position: relative;
-	background-color: #80b640;
-	border-bottom: 4px solid #3c6a02;
+	background-color: #FFF;
+	border-bottom: 4px solid #c8ccd1;
 	padding: 0.5em 0;
 	overflow: hidden;
 	transition: height 200ms;
