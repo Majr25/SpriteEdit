@@ -48,6 +48,7 @@ var i18n = {
 	panelEcchangesTitle: 'Review your manual changes',
 	sectionPlaceholder: 'Type a section name',
 	sectionUncategorized: 'Uncategorized',
+	titleEditing: 'Sprite editing $1',
 	toolbarNewImage: 'New image',
 	toolbarNewSection: 'New section',
 	toolbarRedo: 'Redo',
@@ -77,6 +78,7 @@ var historySupported = window.history && history.pushState;
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
 var pointerEventsSupported = $.client.profile().name !== 'msie' || $.client.profile().versionBase > 10;
 var idsPageId = $doc.data( 'idspage' );
+var originalTitle = document.title;
 
 
 // Handle recreating the editor
@@ -126,6 +128,10 @@ var create = function( state ) {
 	var loadingImages = [];
 	var panels = {};
 	var canTag = null;
+	
+	// Update the title to say we're editing
+	document.title = i18n.titleEditing.replace( /\$1/g, originalTitle );
+	
 	var revisionsApi = new mw.Api( { parameters: {
 		action: 'query',
 		prop: 'revisions',
@@ -3108,6 +3114,8 @@ var create = function( state ) {
 	 * spriteedit action. Used for when the editor is destroyed due to history navigation.
 	 */
 	var destroy = function( restore, leaveUrl ) {
+		document.title = originalTitle;
+		
 		$win.add( document ).off( '.spriteEdit' );
 		
 		if ( !leaveUrl ) {
