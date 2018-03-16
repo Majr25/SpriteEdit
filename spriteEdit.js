@@ -716,7 +716,7 @@ var create = function( state ) {
 		if ( !supports( 'position', 'sticky' ) && !supports( 'position', '-webkit-sticky' ) ) {
 			var fixedClass = 'spriteedit-toolbar-fixed';
 			var contentOffset = $content.offset().left + 1;
-			$win.on( 'scroll.spriteEdit', $.throttle( 50, function() {
+			$win.on( 'scroll.spriteEdit', $.throttle( 32, function() {
 				var fixed = $toolbar.hasClass( fixedClass ),
 					scrollTop = $win.scrollTop(),
 					offset = $barContainer.offset().top;
@@ -1051,14 +1051,13 @@ var create = function( state ) {
 			}
 			$button.focus().blur().addClass( 'spriteedit-processing' );
 			
-			var changesPanel = panels.changes || panel(
-				'changes',
-				i18n.panelChangesTitle,
-				[
+			var changesPanel = panels.changes || panel( 'changes', {
+				title: i18n.panelChangesTitle,
+				content: [
 					$( '<div>' ).addClass( 'spriteedit-sheet-changes' ),
-					$( '<div>' ).addClass( 'spriteedit-id-changes' )
-				]
-			);
+					$( '<div>' ).addClass( 'spriteedit-id-changes' ),
+				],
+			} );
 			var $changesText = changesPanel.$text;
 			
 			$.when( names.getDiff(), sheet.getData() ).then( function( diff, sheetData ) {
@@ -1373,16 +1372,15 @@ var create = function( state ) {
 		
 		
 		/* Window events */
-		$win.on( 'resize.spriteEdit', function() {
-			var $dialog = $( '.spriteedit-dialog' );
-			if ( $dialog.length && $dialog.is( ':visible' ) ) {
-				$dialog.css( { width: '', height: '' } );
-				$dialog.css( {
-					width: $dialog.width(),
-					height: $dialog.height()
-				} );
+		$win.on( 'resize.spriteEdit', $.throttle( 32, function() {
+			var $conflict = $( '#spriteedit-dialog-conflict' );
+			if ( $conflict.length && $conflict.is( ':visible' ) ) {
+				var $textarea = $conflict.find( 'textarea' );
+				$textarea.css( 'max-height', (
+					$conflict.find( '.spriteedit-dialog-text' ).height() - $textarea.parent()[0].offsetTop
+				) + 'px' );
 			}
-		} );
+		} ) );
 		
 		var updateMouse = function( e ) {
 			mouse.moved = true;
@@ -1423,11 +1421,10 @@ var create = function( state ) {
 		if ( !$root.hasClass( 'spriteedit-enabled' ) || $( '#spriteedit-save' ).data( 'ooui-object' ).isDisabled() ) {
 			destroy( true, state === 'history' );
 		} else {
-			var discardPanel = panels.discard || panel(
-				'discard',
-				i18n.panelDiscardTitle,
-				$( '<p>' ).text( i18n.panelDiscardText ),
-				{ right: [
+			var discardPanel = panels.discard || panel( 'discard', {
+				title: i18n.panelDiscardTitle,
+				content: $( '<p>' ).text( i18n.panelDiscardText ),
+				actions: { right: [
 					{ text: i18n.panelDiscardContinue, config: {
 						action: function() {
 							discardPanel.hide();
@@ -1441,9 +1438,9 @@ var create = function( state ) {
 								destroy( true, state === 'history' );
 							} );
 						}
-					} }
-				] }
-			);
+					} },
+				] },
+			} );
 			discardPanel.show();
 		}
 	};
@@ -1810,6 +1807,10 @@ var create = function( state ) {
 					sheetCanvas.clear();
 					sheetCanvas.ctx.drawImage( spritesheet, 0, 0 );
 					
+					// TODO: Clear deleted images so when new images fill their place
+					// the original images don't show up while the old sheet is cached
+					
+					// Insert new images into sheet
 					$doc.find( '.spriteedit-new' ).each( function() {
 						var $box = $( this );
 						var img = $box.find( 'img' )[0];
@@ -2011,11 +2012,10 @@ var create = function( state ) {
 			return;
 		}
 		
-		var conflictPanel = panels.conflict || panel(
-			'conflict',
-			i18n.panelConflictTitle,
-			$( '<p>' ).text( i18n.panelConflictText ),
-			{
+		var conflictPanel = panels.conflict || panel( 'conflict', {
+			title: i18n.panelConflictTitle,
+			content: $( '<p>' ).text( i18n.panelConflictText ),
+			actions: {
 				left: { text: i18n.panelConflictReview, config: {
 					id: 'review-conflict-changes',
 					action: function() {
@@ -2025,18 +2025,20 @@ var create = function( state ) {
 						}
 						$button.blur().addClass( 'spriteedit-processing' );
 						
-						var changesPanel = panels.ecchanges || panel(
-							'ecchanges',
-							i18n.panelEcchangesTitle,
-							$( '<div>' ).addClass( 'spriteedit-id-changes' ),
-							{ right: { text: i18n.panelEcchangesReturn, config: {
+						var changesPanel = panels.ecchanges || panel( 'ecchanges', {
+							title: i18n.panelEcchangesTitle,
+							content: $( '<div>' ).addClass( 'spriteedit-id-changes' ),
+							actions: { right: { text: i18n.panelEcchangesReturn, config: {
 								id: 'spriteedit-return-edit',
 								type: [ 'progressive', 'primary' ],
 								action: function() {
 									conflictPanel.show();
-								}
-							} } }
-						);
+								},
+							} } },
+							onClose: function() {
+								names.invalidate( true );
+							},
+						} );
 						
 						names.setTable( $( '#spriteedit-ec-curText' ).data( 'ooui-object' ).getValue() );
 						names.getDiff().then( function( diff ) {
@@ -2068,13 +2070,16 @@ var create = function( state ) {
 					},
 				} },
 			},
-			function() {
+			onShow: function() {
 				this.$actions.find( 'button' ).removeClass( 'spriteedit-processing' );
 				
 				var $textarea = this.$text.find( 'textarea' );
 				$textarea.css( 'max-height', ( this.$text.height() - $textarea.parent()[0].offsetTop ) + 'px' );
 			},
-		);
+			onClose: function() {
+				names.invalidate( true );
+			},
+		} );
 		
 		$.when(
 			names.getTable(),
@@ -2264,17 +2269,48 @@ var create = function( state ) {
 	 *
 	 * If this is the first panel, the dialog window is created.
 	 * Panels are stored in the "panels" object, which should be checked for
-	 * for panel id prior to calling this function to create a new panel,
+	 * panel id prior to calling this function to create a new panel,
 	 * so duplicates are not made.
 	 * E.g: `var myPanel = panels.myPanel || panel( 'myPanel', ... );`
 	 *
+	 * "id" is the unique ID that identifies this panel
+	 * "config" is an object of config options for this panel
+	 *  "title" is the string to use for the panel's title
+	 *  "content" is HTML to use for the panel's text area,
+	 *   it can be in any format $().append takes (jQuery, nodes, HTML strings, array)
+	 *   The panel will reset to this HTML whenever the dialog box is closed
+	 *   (if "cached" isn't specified)
+	 *  "actions" is an object to specify which buttons to place.
+	 *   It has a "left" and "right" key to specify which side of the
+	 *   dialog to place the buttons which accept an array of objects
+	 *   which are passed to `makeButton`
+	 *  "onShow" is a callback which is called whenever the dialog is
+	 *   opened, or this panel is shown
+	 *  "onHide" is a callback which is called whenever the dialog is
+	 *   closed, or this panel is hidden
+	 *  "onClose" is a callback which is called whenever the dialog is
+	 *   closed, regardless of which panel is currently shown
+	 *  "cached" is a boolean specifying if the panel's HTML should be
+	 *   retained after the dialog is closed, or should be reset to the
+	 *   value of "config.content"
+	 *
 	 * Returns the panel object for the new panel (or the currently displayed
 	 * panel if called with no arguments).
-	 * The panel object contains jQuery objects of the panel's parts, and methods
-	 * for controlling the panel/dialog window.
+	 * The panel object contains jQuery objects of the panel's parts, some of
+	 * the config options, and methods for controlling the panel/dialog window.
+	 * 
+	 * panel.show shows the panel, opening the dialog if it isn't already
+	 *  It accepts a callback function which is called once the dialog/panel
+	 *  opening animation is finished
+	 * panel.hide closes the dialog
+	 *  It accepts a callback function which is called once the dialog closing
+	 *  animation is finished
+	 * panel.clean deletes the panel's text and resets it to the initial
+	 *  value specified in "config.content"
 	 */
-	var panel = function( id, title, content, actions, onShow, cached ) {
-		var $overlay, $dialog = $( '.spriteedit-dialog' );
+	var panel = function( id, config ) {
+		var $overlay;
+		var $dialog = $( '.spriteedit-dialog' );
 		if ( !id ) {
 			return panels[$dialog.data( 'active-panel' )];
 		}
@@ -2292,33 +2328,37 @@ var create = function( state ) {
 					icon: 'close',
 					title: i18n.panelCloseTip,
 					action: function() {
-						panel().hide();
-					}
+						var closingPanel = panel();
+						closingPanel.hide();
+						if ( closingPanel.onClose ) {
+							closingPanel.onClose.call( closingPanel );
+						}
+					},
 				} )
 			).appendTo( $overlay );
 		}
 		
-		if ( content && !Array.isArray( content ) ) {
-			content = [ content ];
+		if ( config.content && !Array.isArray( config.content ) ) {
+			config.content = [ config.content ];
 		}
 		
 		var $panel = $( '<div>' )
 			.prop( 'id', 'spriteedit-dialog-' + id )
 			.addClass( 'spriteedit-dialog-panel' );
 		
-		var $title = $( '<div>' ).addClass( 'spriteedit-dialog-title' ).text( title ).appendTo( $panel );
+		var $title = $( '<div>' ).addClass( 'spriteedit-dialog-title' ).text( config.title ).appendTo( $panel );
 		
 		var $text = $( '<div>' ).addClass( 'spriteedit-dialog-text' ).appendTo( $panel );
 		
-		if ( content ) {
-			$text.append( content );
+		if ( config.content ) {
+			$text.append( config.content );
 			
-			// Keep content as the inital HTML for resetting
-			content = $text.html();
+			// Keep content as the initial HTML for resetting
+			config.content = $text.html();
 		}
 		
 		var $actions;
-		if ( actions ) {
+		if ( config.actions ) {
 			$actions = $( '<div>' ).addClass( 'spriteedit-dialog-actions' ).appendTo( $panel );
 			var $leftActions = $( '<span>' ).appendTo( $actions );
 			var $rightActions = $( '<span>' ).css( 'float', 'right' ).appendTo( $actions );
@@ -2336,32 +2376,20 @@ var create = function( state ) {
 				} );
 			};
 			
-			addButtons( actions.left );
-			addButtons( actions.right, true );
+			addButtons( config.actions.left );
+			addButtons( config.actions.right, true );
 		}
 		
 		$dialog.append( $panel );
 		
 		if ( $overlay ) {
-			$doc.append( $overlay );
+			$( document.body ).append( $overlay );
 		} else {
 			$overlay = $dialog.parent();
 		}
 		
 		$overlay.show();
-		var titleHeight = $title.innerHeight();
-		var actionsHeight;
-		if ( actions ) {
-			actionsHeight = $actions.innerHeight();
-		}
-		$panel.css( {
-			paddingTop: titleHeight,
-			paddingBottom: actionsHeight
-		} );
-		$title.css( 'margin-top', -titleHeight );
-		if ( actions ) {
-			$actions.css( 'margin-bottom', -actionsHeight );
-		}
+		
 		if ( $overlay.css( 'opacity' ) === '0' ) {
 			$overlay.hide();
 		}
@@ -2373,7 +2401,7 @@ var create = function( state ) {
 			$text: $text,
 			$actions: $actions,
 			show: function( callback ) {
-				$dialog.css( { width: '', height: '', transform: 'none', transition: 'none' } );
+				$dialog.css( { transform: 'none', transition: 'none' } );
 				
 				var prevPanel;
 				if ( $overlay.css( 'opacity' ) === '1' ) {
@@ -2381,6 +2409,9 @@ var create = function( state ) {
 					// Remember to cleanup previous panel when the dialog is closed
 					if ( prevPanel && !prevPanel.cached ) {
 						prevPanel.cleanup = true;
+					}
+					if ( prevPanel.onHide ) {
+						prevPanel.onHide.call( prevPanel );
 					}
 				}
 				
@@ -2391,41 +2422,23 @@ var create = function( state ) {
 				}
 				$overlay.css( 'display', '' );
 				$panel.css( 'display', '' );
-				var newRect = $dialog[0].getBoundingClientRect();
-				$dialog.css( 'transform', '' ).redraw().css( 'transition', '' );
-				
-				$dialog.transitionEnd( function() {
-					if ( onShow ) {
-						onShow.call( thisPanel );
-					}
-					if ( callback ) {
-						callback.call( thisPanel );
-					}
-				} );
-				
 				if ( prevPanel ) {
+					var newRect = $dialog[0].getBoundingClientRect();
+					$dialog.css( 'transform', 'scale(1)' ).redraw().css( 'transition', '' );
 					if ( oldRect.width === newRect.width && oldRect.height === newRect.height ) {
 						// No transition to be made
-						$dialog.css( {
-							width: newRect.width,
-							height: newRect.height
-						} );
-						
 						$dialog.trigger( 'transitionend' );
 					} else {
 						$panel.css( 'display', 'none' );
 						$dialog.css( {
 							width: oldRect.width,
-							height: oldRect.height
-						} );
-						$dialog.redraw();
-						$dialog.css( {
+							height: oldRect.height,
+						} ).redraw().css( {
 							width: newRect.width,
-							height: newRect.height
-						} );
-						
-						$dialog.transitionEnd( function() {
+							height: newRect.height,
+						} ).transitionEnd( function() {
 							panelShown = true;
+							$dialog.css( { width: '', height: '' } );
 							$panel.css( 'display', '' );
 						} );
 						
@@ -2440,14 +2453,11 @@ var create = function( state ) {
 						}, 1000 );
 					}
 				} else {
+					$dialog.css( 'transform', '' ).redraw().css( 'transition', '' );
 					$overlay.css( 'opacity', 1 );
 					$dialog
 						.addClass( 'spriteedit-elastic' )
-						.css( {
-							transform: 'scale(1)',
-							width: newRect.width,
-							height: newRect.height
-						} )
+						.css( 'transform', 'scale(1)' )
 						.transitionEnd( function() {
 							$dialog.removeClass( 'spriteedit-elastic' );
 						} );
@@ -2455,11 +2465,22 @@ var create = function( state ) {
 				
 				$dialog.data( 'active-panel', id );
 				
+				if ( config.onShow ) {
+					config.onShow.call( thisPanel );
+				}
+				if ( callback ) {
+					callback.call( thisPanel );
+				}
+				
 				return this;
 			},
 			hide: function( callback ) {
 				if ( !$overlay.is( ':visible' ) ) {
 					return this;
+				}
+				
+				if ( config.onHide ) {
+					config.onHide.call( thisPanel );
 				}
 				
 				$dialog.css( 'transform', 'scale(0)' );
@@ -2471,7 +2492,7 @@ var create = function( state ) {
 					$overlay.css( 'display', 'none' );
 					thisPanel.$panel.css( 'display', 'none' );
 					
-					if ( !cached ) {
+					if ( !config.cached ) {
 						thisPanel.cleanup = true;
 					}
 					$.each( panels, function() {
@@ -2490,14 +2511,16 @@ var create = function( state ) {
 			clean: function() {
 				$text.empty();
 				
-				if ( content ) {
-					$text.append( content );
+				if ( config.content ) {
+					$text.append( config.content );
 				}
 				
 				thisPanel.cleanup = false;
 			},
-			onShow: onShow,
-			cached: cached
+			onShow: config.onShow,
+			onHide: config.onHide,
+			onClose: config.onClose,
+			cached: config.cached,
 		};
 		return thisPanel;
 	};
