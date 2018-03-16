@@ -59,7 +59,7 @@ var i18n = {
 	toolbarToolDeprecate: 'Deprecate',
 	toolbarToolDeprecateTip: 'Toggle names as deprecated',
 	toolbarTools: 'Tools',
-	toolbarUndo: 'Undo'
+	toolbarUndo: 'Undo',
 };
 var $root = $( document.documentElement );
 var $win = $( window );
@@ -141,14 +141,14 @@ var create = function( state ) {
 		action: 'query',
 		prop: 'revisions',
 		rvprop: 'content',
-		utf8: true
+		utf8: true,
 	} } );
 	var parseApi = new mw.Api( { parameters: {
 		action: 'parse',
 		prop: 'text',
 		disablepp: true,
 		disabletoc: true,
-		utf8: true
+		utf8: true,
 	} } );
 	var $headingTemplate = $( '<h3>' ).html(
 		$( '<span>' )
@@ -273,7 +273,7 @@ var create = function( state ) {
 	var curContentRequest = retryableRequest( function() {
 		return revisionsApi.get( {
 			rvprop: 'timestamp',
-			pageids: idsPageId
+			pageids: idsPageId,
 		} );
 	} );
 	var contentRequest = curContentRequest.then( function( data ) {
@@ -306,7 +306,7 @@ var create = function( state ) {
 			action: 'query',
 			meta: 'userinfo',
 			uiprop: 'rights|blockinfo',
-			utf8: true
+			utf8: true,
 		} );
 	} );
 	var permissionsRequest = curPermissionsRequest.then( function( data ) {
@@ -523,7 +523,7 @@ var create = function( state ) {
 				
 				$( this ).css( {
 					height: height,
-					overflow: 'hidden'
+					overflow: 'hidden',
 				} );
 			} );
 			
@@ -543,7 +543,7 @@ var create = function( state ) {
 			
 			$doc.find( '.spritedoc-boxes' ).css( {
 				height: 'auto',
-				overflow: 'visible'
+				overflow: 'visible',
 			} );
 			
 			// If we're sorting boxes, scroll so the box is near the cursor
@@ -567,13 +567,13 @@ var create = function( state ) {
 			handle: 'h3',
 			vertical: true,
 			sortStart: collapseBoxes,
-			sortEnd: expandBoxes
+			sortEnd: expandBoxes,
 		} );
 		makeSortable( {
 			selectors: {
 				container: '.spritedoc-section',
 				parent: '.spritedoc-boxes',
-				elem: '.spritedoc-box'
+				elem: '.spritedoc-box',
 			},
 			autoSort: true,
 			sortStart: collapseBoxes,
@@ -583,13 +583,13 @@ var create = function( state ) {
 		// Create toolbar
 		var contentPadding = {
 			left: $content.css( 'padding-left' ),
-			right: $content.css( 'padding-right' )
+			right: $content.css( 'padding-right' ),
 		};
 		$toolbar = $( '<div>' ).addClass( 'spriteedit-toolbar' ).css( {
 			paddingLeft: contentPadding.left,
 			paddingRight: contentPadding.right,
 			marginLeft: '-' + contentPadding.left,
-			marginRight: '-' + contentPadding.right
+			marginRight: '-' + contentPadding.right,
 		} );
 		var undoButton = new OO.ui.ButtonInputWidget( {
 			id: 'spriteedit-undo',
@@ -787,7 +787,7 @@ var create = function( state ) {
 					$( '<ul>' ).addClass( 'spritedoc-boxes' )
 				),
 				index: $( nearestSection() ).index() - 1,
-				$parent: $doc
+				$parent: $doc,
 			}, true );
 			
 			$newHeading.find( '.mw-headline' ).focus();
@@ -804,7 +804,7 @@ var create = function( state ) {
 			$( '<input type="file">' )
 				.attr( {
 					accept: 'image/*',
-					multiple: true
+					multiple: true,
 				} )
 				.one( 'change.spriteEdit', function() {
 					insertSprites( this.files );
@@ -1111,7 +1111,7 @@ var create = function( state ) {
 			change( 'insert', {
 				$elem: $item,
 				index: $names.length - 1,
-				$parent: $names.first().parent()
+				$parent: $names.first().parent(),
 			}, true );
 			
 			$name.focus();
@@ -1132,7 +1132,7 @@ var create = function( state ) {
 					$.each( [
 						'#spriteedit-save',
 						'#spriteedit-summary',
-						'#spriteedit-review-button'
+						'#spriteedit-review-button',
 					], function() {
 						if ( $( this ).length ) {
 							$( this ).data( 'ooui-object' ).setDisabled( false )
@@ -1164,7 +1164,7 @@ var create = function( state ) {
 						change( 'text', {
 							$elem: $this,
 							oldText: origText,
-							text: i18n.sectionUncategorized
+							text: i18n.sectionUncategorized,
 						} );
 						return;
 					} else {
@@ -1195,7 +1195,7 @@ var create = function( state ) {
 				change( 'delete', {
 					$elem: $remove,
 					index: $remove.index() - 1,
-					$parent: $parent
+					$parent: $parent,
 				} );
 				return;
 			}
@@ -1205,7 +1205,7 @@ var create = function( state ) {
 					$.each( [
 						'#spriteedit-save',
 						'#spriteedit-summary',
-						'#spriteedit-review-button'
+						'#spriteedit-review-button',
 					], function() {
 						if ( $( this ).length ) {
 							$( this ).data( 'ooui-object' ).setDisabled( true );
@@ -1227,7 +1227,7 @@ var create = function( state ) {
 			change( 'edit', {
 				$elem: $this,
 				oldText: origText,
-				text: text
+				text: text,
 			} );
 			
 			if ( $this.hasClass( 'spriteedit-new' ) ) {
@@ -1314,11 +1314,11 @@ var create = function( state ) {
 										change( 'replace image', {
 											$elem: $img,
 											$parent: $parent,
-											$oldImg: $parent.find( 'img' )
+											$oldImg: $parent.find( 'img' ),
 										} );
 									} );
 								} ).click();
-						}
+						},
 					} ),
 					makeButton( i18n.ctxDownloadImage, {
 						icon: 'download',
@@ -1346,11 +1346,11 @@ var create = function( state ) {
 							
 							var dlLink = $( '<a>' ).attr( {
 								href: url,
-								download: $box.data( 'sort-key' ) + '.png'
+								download: $box.data( 'sort-key' ) + '.png',
 							} ).appendTo( 'body' );
 							dlLink[0].click();
 							dlLink.remove();
-						}
+						},
 					} ),
 					makeButton( i18n.ctxDeleteImage, {
 						type: [ 'destructive', 'primary' ],
@@ -1361,11 +1361,11 @@ var create = function( state ) {
 								change( 'delete', {
 									$elem: $box,
 									$parent: $box.parent(),
-									index: $box.index() - 1
+									index: $box.index() - 1,
 								} );
 							} );
-						}
-					} )
+						},
+					} ),
 				], { horizontal: true, class: 'spriteedit-tooltip-controls' } );
 			} );
 		}
@@ -1582,7 +1582,7 @@ var create = function( state ) {
 									id: id,
 									pos: pos,
 									section: sectionId,
-									deprecated: $this.hasClass( 'spritedoc-deprecated' )
+									deprecated: $this.hasClass( 'spritedoc-deprecated' ),
 								} );
 							} );
 						} );
@@ -1595,7 +1595,7 @@ var create = function( state ) {
 					$.each( ids, function() {
 						var idData = [
 							luaKeyQuote( i18n.luaKeyPos ) + ' = ' + this.pos,
-							luaKeyQuote( i18n.luaKeySection ) + ' = ' + this.section
+							luaKeyQuote( i18n.luaKeySection ) + ' = ' + this.section,
 						];
 						if ( this.deprecated ) {
 							idData.push( luaKeyQuote( i18n.luaKeyDeprecated ) + ' = true' );
@@ -1615,7 +1615,7 @@ var create = function( state ) {
 						'	' + luaKeyQuote( i18n.luaKeyIds ) + ' = {',
 						'		' + idsRows.join( '\n\t\t' ),
 						'	}',
-						'}'
+						'}',
 					].join( '\n' ) );
 				} );
 				
@@ -1641,7 +1641,7 @@ var create = function( state ) {
 				names.getTable().then( function( table ) {
 					return retryableRequest( function() {
 						return new mw.Api( {
-							ajax: { contentType: 'multipart/form-data' }
+							ajax: { contentType: 'multipart/form-data' },
 						} ).post( {
 							action: 'query',
 							prop: 'revisions',
@@ -1649,7 +1649,7 @@ var create = function( state ) {
 							rvprop: '',
 							rvdifftotext: table,
 							rvlimit: 1,
-							utf8: true
+							utf8: true,
 						} );
 					} );
 				} ).then( function( data ) {
@@ -1678,7 +1678,7 @@ var create = function( state ) {
 					// TODO: Check if edit actually succeeded on failure or null edit
 					return retryableRequest( function() {
 						return new mw.Api( {
-							ajax: { contentType: 'multipart/form-data' }
+							ajax: { contentType: 'multipart/form-data' },
 						} ).postWithToken( 'csrf', {
 							action: 'edit',
 							nocreate: true,
@@ -1699,7 +1699,7 @@ var create = function( state ) {
 				} );
 				
 				return promises.save;
-			}
+			},
 		};
 	}() );
 	
@@ -1862,13 +1862,13 @@ var create = function( state ) {
 					
 					return retryableRequest( function() {
 						return new mw.Api( {
-							ajax: { contentType: 'multipart/form-data' }
+							ajax: { contentType: 'multipart/form-data' },
 						} ).postWithToken( 'csrf', {
 							action: 'upload',
 							stash: true,
 							ignorewarnings: true,
 							filename: $doc.data( 'spritesheet' ),
-							file: sheetBytes
+							file: sheetBytes,
 						} );
 					} );
 				} ).then( function( data ) {
@@ -1921,7 +1921,7 @@ var create = function( state ) {
 				} );
 				
 				return promises.save;
-			}
+			},
 		};
 	}() );
 	
@@ -1961,7 +1961,7 @@ var create = function( state ) {
 				retryableRequest( function() {
 					return new mw.Api().post( {
 						action: 'purge',
-						pageids: mw.config.get( 'wgArticleId' )
+						pageids: mw.config.get( 'wgArticleId' ),
 					} );
 				} );
 			}, handleSaveError );
@@ -1978,7 +1978,7 @@ var create = function( state ) {
 						title: mw.config.get( 'wgPageName' ),
 						text: $( '<i>' ).html(
 							$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-						).html()
+						).html(),
 					} );
 				} );
 			}
@@ -2138,7 +2138,7 @@ var create = function( state ) {
 		var imagesPerRow = settings.sheetWidth / settings.imageWidth;
 		return {
 			left: pos % imagesPerRow * settings.imageWidth,
-			top: Math.floor( pos / imagesPerRow ) * settings.imageHeight
+			top: Math.floor( pos / imagesPerRow ) * settings.imageHeight,
 		};
 	};
 	
@@ -2173,7 +2173,7 @@ var create = function( state ) {
 			change( 'insert', {
 				$elem: $newBox,
 				index: index - 1,
-				$parent: $parent
+				$parent: $parent,
 			} );
 		} );
 	};
@@ -2198,7 +2198,7 @@ var create = function( state ) {
 			
 			var $canvas = $( '<canvas>' ).attr( {
 				width: settings[type + 'Width'],
-				height: settings[type + 'Height']
+				height: settings[type + 'Height'],
 			} ).appendTo( $doc );
 			var canvas = $canvas[0];
 			var ctx = canvas.getContext( '2d' );
@@ -2209,12 +2209,12 @@ var create = function( state ) {
 				resize: function() {
 					$canvas.attr( {
 						width: settings[type + 'Width'],
-						height: settings[type + 'Height']
+						height: settings[type + 'Height'],
 					} );
 				},
 				clear: function() {
 					ctx.clearRect( 0, 0, canvas.width, canvas.height );
-				}
+				},
 			};
 			canvases[type] = funcs;
 			return funcs;
@@ -2587,18 +2587,18 @@ var create = function( state ) {
 			if ( config.horizontal ) {
 				$tooltip.addClass( 'spriteedit-tooltip-horizontal' ).css( {
 					top: anchorPos.top - docPos.top + $anchor.outerHeight() / 2,
-					left: anchorPos.left - docPos.left - $tooltip.outerWidth()
+					left: anchorPos.left - docPos.left - $tooltip.outerWidth(),
 				} );
 			} else {
 				$tooltip.css( {
 					top: anchorPos.top - docPos.top - $tooltip.outerHeight(),
-					left: anchorPos.left - docPos.left + $anchor.outerWidth() / 2
+					left: anchorPos.left - docPos.left + $anchor.outerWidth() / 2,
 				} );
 			}
 			
 			$tooltip.addClass( 'spriteedit-elastic' ).css( {
 				opacity: 1,
-				transform: 'scale(1)'
+				transform: 'scale(1)',
 			} ).transitionEnd( function() {
 				$( this ).removeClass( 'spriteedit-elastic' );
 				
@@ -2614,7 +2614,7 @@ var create = function( state ) {
 			
 			$tooltip.off( 'transitionend.spriteEdit' ).css( {
 				opacity: 0,
-				transform: 'scale(0)'
+				transform: 'scale(0)',
 			} ).transitionEnd( function() {
 				$( this ).remove();
 				
@@ -2723,19 +2723,19 @@ var create = function( state ) {
 			var ghostRect = ghostElem.getBoundingClientRect();
 			var cursorOffset = {
 				top: ( ghostRect.top - e.clientY ) / ghostRect.height,
-				left: ( ghostRect.left - e.clientX ) / ghostRect.width
+				left: ( ghostRect.left - e.clientX ) / ghostRect.width,
 			};
 			
 			$ghost.addClass( 'spriteedit-ghost' ).css( {
 				top: e.clientY,
-				left: e.clientX
+				left: e.clientX,
 			} );
 			
 			// Apply offsets
 			var newGhostRect = ghostElem.getBoundingClientRect();
 			$ghost.css( {
 				marginTop: newGhostRect.height * cursorOffset.top,
-				marginLeft: newGhostRect.width * cursorOffset.left
+				marginLeft: newGhostRect.width * cursorOffset.left,
 			} );
 			
 			if ( options.sortStart ) {
@@ -2826,7 +2826,7 @@ var create = function( state ) {
 					change( 'delete', {
 						$elem: $box,
 						index: $box.index() - 1,
-						$parent: $box.parent()
+						$parent: $box.parent(),
 					}, true );
 				}
 				
@@ -2836,7 +2836,7 @@ var create = function( state ) {
 					$oldParent: $ghost.parent(),
 					index: index - 1,
 					$parent: $hoverParent.length && $hoverParent.find( selectors.parent ) ||
-						$placeholder.parent()
+						$placeholder.parent(),
 				} );
 			}
 			
@@ -3009,7 +3009,7 @@ var create = function( state ) {
 				$.each( [
 					'#spriteedit-save',
 					'#spriteedit-summary',
-					'#spriteedit-review-button'
+					'#spriteedit-review-button',
 				], function() {
 					if ( $( this ).length ) {
 						$( this ).data( 'ooui-object' ).setDisabled( true );
@@ -3047,7 +3047,7 @@ var create = function( state ) {
 			'#spriteedit-undo',
 			'#spriteedit-save',
 			'#spriteedit-summary',
-			'#spriteedit-review-button'
+			'#spriteedit-review-button',
 		], function() {
 			if ( $( this ).length ) {
 				$( this ).data( 'ooui-object' ).setDisabled( false );
@@ -3072,7 +3072,7 @@ var create = function( state ) {
 					change( 'edit', {
 						$elem: content.$elem,
 						text: content.oldText,
-						oldText: content.text
+						oldText: content.text,
 					}, false, true );
 				break;
 				
@@ -3081,12 +3081,12 @@ var create = function( state ) {
 						change( 'insert', {
 							$elem: content.$elem,
 							index: content.oldIndex,
-							$parent: content.$oldParent
+							$parent: content.$oldParent,
 						}, false, true );
 					} else {
 						change( 'delete', {
 							$elem: content.$elem,
-							$parent: content.$parent
+							$parent: content.$parent,
 						}, false, true );
 					}
 				break;
@@ -3095,7 +3095,7 @@ var create = function( state ) {
 					change( 'insert', {
 						$elem: content.$elem,
 						index: content.index,
-						$parent: content.$parent
+						$parent: content.$parent,
 					}, false, true );
 				break;
 				
@@ -3104,7 +3104,7 @@ var create = function( state ) {
 						change( 'replace image', {
 							$elem: content.$oldImg,
 							$parent: content.$parent,
-							$oldImg: content.$elem
+							$oldImg: content.$elem,
 						}, false, true );
 					} else {
 						change( 'reset image', content, false, true );
@@ -3132,7 +3132,7 @@ var create = function( state ) {
 				'#spriteedit-undo',
 				'#spriteedit-save',
 				'#spriteedit-summary',
-				'#spriteedit-review-button'
+				'#spriteedit-review-button',
 			], function() {
 				if ( $( this ).length ) {
 					$( this ).data( 'ooui-object' ).setDisabled( true );
@@ -3187,7 +3187,7 @@ var create = function( state ) {
 					oldIndex: oldIndex - 1,
 					$oldParent: $parent,
 					index: index - 1,
-					$parent: $parent
+					$parent: $parent,
 				}, false, true );
 			} else if ( index === 0 ) {
 				updateBoxSorting( $item.closest( '.spritedoc-box' ) );
@@ -3216,7 +3216,7 @@ var create = function( state ) {
 				oldIndex: oldIndex - 1,
 				$oldParent: $parent,
 				index: index - 1,
-				$parent: $parent
+				$parent: $parent,
 			}, false, true );
 		}
 	};
@@ -3293,7 +3293,7 @@ var create = function( state ) {
 			'.spriteedit-handle',
 			'.spriteedit-add-name',
 			'.spriteedit-tooltip',
-			'.spriteedit-dialog-overlay'
+			'.spriteedit-dialog-overlay',
 		], function() {
 			$( this ).remove();
 		} );
