@@ -17,12 +17,12 @@
 .spriteedit-sorting * {
 	cursor: move !important;
 	cursor: -webkit-grabbing !important;
-	cursor: -moz-grabbing !important;
 	cursor: grabbing !important;
 }
 
 .spriteedit-elastic {
-	transition-timing-function: cubic-bezier(0.46, 0, 0.19, 1.44) !important;
+	-webkit-transition-timing-function: cubic-bezier(0.46, 0, 0.19, 1.44) !important;
+	        transition-timing-function: cubic-bezier(0.46, 0, 0.19, 1.44) !important;
 }
 
 .spriteedit-droptarget {
@@ -49,6 +49,7 @@
 }
 
 .spriteedit-toolbar-container {
+	position: -webkit-sticky;
 	position: sticky;
 	top: 0;
 	z-index: 91;
@@ -59,7 +60,8 @@
 	border-bottom: 4px solid #c8ccd1;
 	padding: 0.5em 0;
 	overflow: hidden;
-	transition: height 200ms;
+	-webkit-transition: height 200ms;
+	        transition: height 200ms;
 	z-index: 91;
 }
 .spriteedit-toolbar-fixed {
@@ -76,8 +78,8 @@
 }
 .spriteedit-tool-deprecate .spritedoc-name > code {
 	-webkit-user-select: none;
-	-moz-user-select: none;
-	-ms-user-select: none;
+	   -moz-user-select: none;
+	    -ms-user-select: none;
 	user-select: none;
 	cursor: pointer;
 }
@@ -87,22 +89,22 @@
 	bottom: 0.5em;
 }
 #spriteedit-saveform {
-	display: -webkit-flex;
-	display: -ms-flex;
+	display: -ms-flexbox;
+	display: -webkit-box;
 	display: flex;
 	margin-top: 0.5em;
 }
 #spriteedit-summary {
 	margin-right: 0.5em;
-	-webkit-flex: auto;
+	-webkit-box-flex: 1;
 	-ms-flex: auto;
-	flex: auto;
+	    flex: auto;
 }
 #spriteedit-review-button {
 	margin-right: 0.5em;
-	-webkit-flex: none;
+	-webkit-box-flex: 0;
 	-ms-flex: none;
-	flex: none;
+	    flex: none;
 }
 
 .spritedoc-box:hover {
@@ -110,10 +112,11 @@
 }
 
 .spriteedit-handle {
-	-webkit-flex: none;
+	-webkit-box-flex: 0;
 	-ms-flex: none;
-	flex: none;
+	    flex: none;
 	background: #AAA;
+	background: -webkit-linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 0 0, -webkit-linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 2px 2px;
 	background: linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 0 0, linear-gradient(#AAA, #AAA 50%, #FFF 50%, #FFF) 2px 2px;
 	background-repeat: repeat-y;
 	background-size: 2px 4px;
@@ -121,11 +124,11 @@
 	margin-right: 0.3em;
 	cursor: move;
 	cursor: -webkit-grab;
-	cursor: -moz-grab;
 	cursor: grab;
 	visibility: hidden;
 	opacity: 0;
-	transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+	-webkit-transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+	        transition: opacity 200ms 300ms, visibility 0s linear 500ms;
 }
 .spritedoc-box > .spriteedit-handle {
 	position: absolute;
@@ -134,7 +137,7 @@
 	bottom: 0;
 }
 
-html.spriteedit-imageeditingenabled .spritedoc-image {
+.spriteedit-imageeditingenabled .spritedoc-image {
 	cursor: pointer;
 }
 
@@ -145,7 +148,8 @@ html.spriteedit-imageeditingenabled .spritedoc-image {
 	position: absolute;
 	visibility: hidden;
 	opacity: 0;
-	transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+	-webkit-transition: opacity 200ms 300ms, visibility 0s linear 500ms;
+	        transition: opacity 200ms 300ms, visibility 0s linear 500ms;
 	z-index: 9;
 }
 .spriteedit-add-name > button {
@@ -154,25 +158,29 @@ html.spriteedit-imageeditingenabled .spritedoc-image {
 	padding: 1px 0 2px;
 	width: 100%;
 }
-html.spriteedit-hidecontrols .spriteedit-handle,
-html.spriteedit-hidecontrols .spriteedit-add-name {
+
+.spriteedit-hidecontrols .spriteedit-handle,
+.spriteedit-hidecontrols .spriteedit-add-name {
 	visibility: hidden !important;
 	opacity: 0 !important;
-	transition: visibility, opacity !important;
+	-webkit-transition: visibility, opacity !important;
+	        transition: visibility, opacity !important;
 }
 #spritedoc h3:hover > .spriteedit-handle,
 .spritedoc-box:hover .spriteedit-handle,
 .spritedoc-box:hover > .spriteedit-add-name {
 	visibility: visible;
 	opacity: 1;
-	transition-delay: 200ms;
+	-webkit-transition-delay: 200ms;
+	        transition-delay: 200ms;
 }
 .spritedoc-box:hover .spritedoc-name > .spriteedit-handle {
 	opacity: 0.5;
 }
 .spritedoc-box .spritedoc-name:hover > .spriteedit-handle {
 	opacity: 1;
-	transition-delay: 0s;
+	-webkit-transition-delay: 0s;
+	        transition-delay: 0s;
 }
 
 #spritedoc [contentEditable]:empty:after {
@@ -182,9 +190,6 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 	content: attr(data-placeholder);
 	opacity: 0.54;
 	font-style: italic;
-}
-#spritedoc [contentEditable][data-placeholder]:not(:empty):after {
-	content: none !important;
 }
 
 .spriteedit-dupe {
@@ -204,6 +209,16 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 
 #spritedoc .spriteedit-processing {
 	background-size: 1em 1em;
+	background-image: -webkit-linear-gradient(
+		45deg,
+		rgba(204, 204, 204, 0.4) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(204, 204, 204, 0.4) 50%,
+		rgba(204, 204, 204, 0.4) 75%,
+		transparent 75%,
+		transparent
+	);
 	background-image: linear-gradient(
 		45deg,
 		rgba(204, 204, 204, 0.4) 25%,
@@ -214,9 +229,14 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 		transparent 75%,
 		transparent
 	);
-	animation: spriteedit-processing 1s infinite linear;
 	/* Limit mw-ui-button transition to background-color */
 	transition: background-color .1s ease-in-out, color .1s ease-in-out, box-shadow .1s ease-in-out;
+	-webkit-animation: spriteedit-processing 1s infinite linear;
+	        animation: spriteedit-processing 1s infinite linear;
+}
+@-webkit-keyframes spriteedit-processing {
+	0% { background-position: 0 0; }
+	100% { background-position: 1em 0; }
 }
 @keyframes spriteedit-processing {
 	0% { background-position: 0 0; }
@@ -228,16 +248,21 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 	margin-left: -19px;
 	padding: 9px;
 	opacity: 0;
-	transform: scale(0);
-	transform-origin: 19px bottom;
-	transition: transform 350ms, opacity 350ms;
+	-webkit-transform: scale(0);
+	        transform: scale(0);
+	-webkit-transform-origin: 19px bottom;
+	        transform-origin: 19px bottom;
+	-webkit-transition: opacity 350ms, -webkit-transform 350ms;
+	        transition: opacity 350ms, -webkit-transform 350ms;
+	        transition: transform 350ms, opacity 350ms;
 	z-index: 121;
 	white-space: nowrap;
 }
 .spriteedit-tooltip-horizontal {
 	margin-left: 0;
 	margin-top: -19px;
-	transform-origin: right 19px;
+	-webkit-transform-origin: right 19px;
+	        transform-origin: right 19px;
 }
 .spriteedit-tooltip-text,
 .spriteedit-tooltip-arrow:before {
@@ -257,12 +282,14 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 	right: -4px;
 	bottom: auto;
 	left: auto;
-	transform: rotate(-90deg);
+	-webkit-transform: rotate(-90deg);
+	        transform: rotate(-90deg);
 }
 .spriteedit-tooltip-arrow:before {
 	content: "";
 	position: absolute;
-	transform: rotate(45deg);
+	-webkit-transform: rotate(45deg);
+	        transform: rotate(45deg);
 	height: 10px;
 	width: 10px;
 	left: 4px;
@@ -271,8 +298,9 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 }
 
 .spriteedit-dialog-overlay {
-	display: -webkit-flex;
 	display: -ms-flex;
+	display: -webkit-box;
+	display: -ms-flexbox;
 	display: flex;
 	align-items: center;
 	position: fixed;
@@ -282,19 +310,27 @@ html.spriteedit-hidecontrols .spriteedit-add-name {
 	bottom: 0;
 	background-color: rgba(0,0,0,0.2);
 	opacity: 0;
-	transition: opacity 300ms;
+	-webkit-transition: opacity 300ms;
+	        transition: opacity 300ms;
 	z-index: 9990
 }
 .spriteedit-dialog {
+	display: -webkit-box;
+	display: -ms-flexbox;
+	display: flex;
 	position: relative;
 	background-color: #FFF;
 	max-width: 90%;
 	max-height: 80%;
-	transform: scale(0);
-	transition-property: transform, width, height;
-	transition-duration: 400ms, 350ms, 350ms;
 	/* Non-flex fallback */
 	margin: 1em auto;
+	-webkit-transform: scale(0);
+	        transform: scale(0);
+	-webkit-transition-property: width, height, -webkit-transform;
+	        transition-property: width, height, -webkit-transform;
+	        transition-property: transform, width, height;
+	-webkit-transition-duration: 400ms, 350ms, 350ms;
+	        transition-duration: 400ms, 350ms, 350ms;
 	border-radius: 3px;
 	overflow: hidden;
 }

@@ -705,7 +705,7 @@ var create = function( state ) {
 		
 		/* Toolbar events */
 		// Manually make the toolbar sticky if position:sticky isn't supported
-		if ( !supports( 'position', 'sticky' ) ) {
+		if ( !supports( 'position', 'sticky' ) && !supports( 'position', '-webkit-sticky' ) ) {
 			var fixedClass = 'spriteedit-toolbar-fixed';
 			var contentOffset = $content.offset().left + 1;
 			$win.on( 'scroll.spriteEdit', $.throttle( 50, function() {
