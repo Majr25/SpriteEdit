@@ -1,5 +1,6 @@
 ( function() {
 'use strict';
+
 /**
  * Add an edit button which loads the sprite editor
  *
@@ -8,7 +9,8 @@
  * Uses the History API where supported to update the URL, otherwise
  * the URL isn't updated.
  */
-if ( !$( '#spritedoc' ).length ) {
+var editPage = $( '#sprite-editor-message' ).data( 'page' ) || null;
+if ( !$( '#spritedoc' ).length && !editPage ) {
 	return;
 }
 
@@ -17,49 +19,57 @@ if ( !$editTab.length ) {
 	$editTab = $( '#ca-viewsource' );
 }
 var $spriteEditLink = $( '<a>' ).text( 'Edit sprite' ).attr( 'href',
-	mw.util.getUrl( null, { spriteaction: 'edit' } )
+	mw.util.getUrl( editPage, { spriteaction: 'edit' } )
 );
 var $spriteEditTab = $( '<li>' ).attr( 'id', 'ca-spriteedit' ).append(
 	$( '<span>' ).append( $spriteEditLink )
 );
 $spriteEditTab.insertAfter( $editTab );
 
+// Page to sprite edit is not here, so no need to bind events
+if ( editPage ) {
+	return;
+}
+
 var loadSpriteEditor = function() {
 	$spriteEditTab.add( '#ca-view' ).toggleClass( 'selected' );
 	
-	mw.loader.load( 'ext.gadget.spriteEdit' );
+	return mw.loader.using( 'ext.gadget.spriteEdit' );
 };
-if ( location.search.match( 'spriteaction=edit' ) ) {
+if ( location.search.match( '[?&]spriteaction=edit' ) ) {
 	loadSpriteEditor();
-} else {
-	var $win = $( window );
-	$spriteEditLink.one( 'click', function( e ) {
-		if ( window.history && history.pushState ) {
-			// Initially add the history so it is not delayed waiting
-			// for the editor to load. The editor will handle it from now.
-			history.pushState( {}, '', this.href );
-		}
-		
-		loadSpriteEditor();
+	return;
+}
+
+var $win = $( window );
+$spriteEditLink.one( 'click.spriteEditLoader', function( e ) {
+	if ( window.history && history.pushState ) {
+		// Initially add the history so it is not delayed waiting
+		// for the editor to load. The editor will handle it from now.
+		history.pushState( {}, '', this.href );
+	}
+	
+	loadSpriteEditor().then( function() {
 		$win.off( '.spriteEditLoader' );
-		
-		e.preventDefault();
 	} );
 	
-	if ( window.history && history.pushState ) {
-		// If the page is reloaded while the editor isn't loaded, navigating
-		// back to the editor won't work, so an initial navigation check is
-		// necessary to load the editor, where it will then monitor navigation
-		$win.on( 'popstate.spriteEditLoader', function() {
-			if (
-				location.search.match( 'spriteaction=edit' ) &&
-				!$( 'html' ).hasClass( 'spriteedit-loaded' )
-			) {
-				loadSpriteEditor();
+	e.preventDefault();
+} );
+
+if ( window.history && history.pushState ) {
+	// If the page is reloaded while the editor isn't loaded, navigating
+	// back to the editor won't work, so an initial navigation check is
+	// necessary to load the editor, where it will then monitor navigation
+	$win.on( 'popstate.spriteEditLoader', function() {
+		if (
+			location.search.match( '[?&]spriteaction=edit' ) &&
+			!$( 'html' ).hasClass( 'spriteedit-loaded' )
+		) {
+			loadSpriteEditor().then( function() {
 				$win.off( '.spriteEditLoader' );
-			}
-		} );
-	}
+			} );
+		}
+	} );
 }
 
 }() );
