@@ -409,14 +409,14 @@ var create = function( state ) {
 		
 		$( '.mw-editsection' ).add( '.mw-editsection-like' ).css( 'display', 'none' );
 		
-		// Store previous element and parent
-		// to re-attach to once done.
+		// Store previous element and parent to re-attach to once done
+		// and the current scroll position
 		var $docPrev = $doc.prev();
 		var $docParent = $doc.parent();
+		var initialScroll = $win.scrollTop();
 		$doc.detach();
 		
 		$doc.find( '#toc' ).remove();
-		
 		
 		$doc.append(
 			$( '<div>' ).addClass( 'spriteedit-autoscroll spriteedit-autoscroll-up' ),
@@ -662,10 +662,14 @@ var create = function( state ) {
 		var $barContainer = $( '<div>' ).addClass( 'spriteedit-toolbar-container' )
 			.append( $toolbar ).prependTo( $doc );
 		
+		// Re-attach content and reset scroll position
 		if ( $docPrev.length ) {
 			$doc.insertAfter( $docPrev );
 		} else {
 			$doc.prependTo( $docParent );
+		}
+		if ( $win.scrollTop() !== initialScroll ) {
+			scroll( 0, initialScroll );
 		}
 		
 		// Set height now that everything is re-attached
