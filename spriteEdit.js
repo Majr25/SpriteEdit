@@ -1046,21 +1046,25 @@ var create = function( state ) {
 			}
 			$button.focus().blur().addClass( 'spriteedit-processing' );
 			
+			var sheetUrl;
 			var changesPanel = panels.changes || panel( 'changes', {
 				title: i18n.panelChangesTitle,
 				content: [
 					$( '<div>' ).addClass( 'spriteedit-sheet-changes' ),
 					$( '<div>' ).addClass( 'spriteedit-id-changes' ),
 				],
+				onClose: function() {
+					URL.revokeObjectURL( sheetUrl );
+				},
 			} );
 			var $changesText = changesPanel.$text;
 			
-			$.when( names.getDiff(), sheet.getData() ).then( function( diff, sheetData ) {
+			$.when( names.getDiff(), sheet.getData() ).then( function( diff, sheetBlob ) {
 				var sheetChanges;
-				if ( !diff && !sheetData ) {
+				if ( !diff && !sheetBlob ) {
 					$changesText.text( i18n.panelChangesNoDiffFromCur );
 				} else {
-					if ( sheetData ) {
+					if ( sheetBlob ) {
 						sheetChanges = $.Deferred();
 						var newSpritesheet = new Image();
 						newSpritesheet.onload = function() {
@@ -1074,7 +1078,8 @@ var create = function( state ) {
 							
 							sheetChanges.resolve();
 						};
-						newSpritesheet.src = sheetData;
+						sheetUrl = URL.createObjectURL( sheetBlob );
+						newSpritesheet.src = sheetUrl;
 					}
 					if ( diff ) {
 						$changesText.find( '.spriteedit-id-changes' ).append(
@@ -1829,7 +1834,7 @@ var create = function( state ) {
 						
 						sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
 					} );
-					deferred.resolve( sheetCanvas.canvas.toDataURL() );
+					sheetCanvas.canvas.toBlob( deferred.resolve );
 					
 					loadingImages = [];
 				}, function() {
@@ -1848,16 +1853,7 @@ var create = function( state ) {
 					return promises.stash;
 				}
 				
-				sheet.getData().then( function( sheetData ) {
-					var sheetByteString = atob( sheetData.split( ',' )[1] );
-					var sheetByteStringLen = sheetByteString.length;
-					var buffer = new ArrayBuffer( sheetByteStringLen );
-					var intArray = new Uint8Array( buffer );
-					for ( var i = 0; i < sheetByteStringLen; i++) {
-						intArray[i] = sheetByteString.charCodeAt( i );
-					}
-					var sheetBytes = new Blob( [buffer], { type: 'image/png' } );
-					
+				sheet.getData().then( function( blob ) {
 					return retryableRequest( function() {
 						return new mw.Api( {
 							ajax: { contentType: 'multipart/form-data' },
@@ -1866,7 +1862,7 @@ var create = function( state ) {
 							stash: true,
 							ignorewarnings: true,
 							filename: $doc.data( 'spritesheet' ),
-							file: sheetBytes,
+							file: blob,
 						} );
 					} );
 				} ).then( function( data ) {
@@ -3685,6 +3681,26 @@ var findChangeTag = function( tag, options ) {
 		return foundActive;
 	} );
 };
+
+/** Polyfills **/
+if ( !HTMLCanvasElement.prototype.toBlob ) {
+	Object.defineProperty( HTMLCanvasElement.prototype, 'toBlob', {
+		value: function( callback, type, quality ) {
+			var canvas = this;
+			setTimeout( function() {
+				var binStr = atob( canvas.toDataURL( type, quality ).split( ',' )[1] );
+				var len = binStr.length;
+				var arr = new Uint8Array( len );
+				
+				for ( var i = 0; i < len; i++ ) {
+					arr[i] = binStr.charCodeAt( i );
+				}
+				
+				callback( new Blob( [arr], { type: type || 'image/png' } ) );
+			} );
+		},
+	} );
+}
 
 
 // Finally start the editor
