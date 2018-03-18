@@ -64,7 +64,6 @@ var i18n = {
 var $root = $( document.documentElement );
 var $win = $( window );
 var $doc = $( '#spritedoc' );
-var inlineStyle;
 var URL = window.URL || window.webkitURL;
 var imageEditingSupported = !!( window.FileList &&
 	window.ArrayBuffer &&
@@ -215,14 +214,7 @@ var create = function( state ) {
 					settings.sheetWidth = this.width;
 					settings.sheetHeight = this.height;
 					
-					if ( inlineStyle ) {
-						inlineStyle.disabled = true;
-						URL.revokeObjectURL( inlineStyle.url );
-					}
-					inlineStyle = mw.util.addCSS(
-						'#spritedoc .sprite { background-image: url(' + this.src + ') !important }'
-					);
-					inlineStyle.url = this.src;
+					overwriteSpritesheet( this.src );
 					
 					deferred.resolve();
 				};
@@ -1316,6 +1308,7 @@ var create = function( state ) {
 									tooltip.hide();
 									
 									scaleImage( this.files[0] ).done( function( $img ) {
+										$img.addClass( 'spriteedit-replacing-image' );
 										change( 'replace image', {
 											$elem: $img,
 											$parent: $parent,
@@ -1938,10 +1931,16 @@ var create = function( state ) {
 	 * "summary" is the text from the summary field.
 	 * "refresh" is a boolean, which when true will cause the sprite documentation
 	 * to be reparsed after saving (e.g. in the event of an edit conflict).
+	 * "conflict" is a boolean which specifies if this is saving an edit conflict or not
 	 */
 	var saveChanges = function( summary, refresh, conflict ) {
 		// No more editing
 		$root.addClass( 'spriteedit-hidecontrols' );
+		
+		// Have to refresh if a new image is added to get the sprite HTML
+		if ( refresh !== false ) {
+			refresh = !!$( '.spriteedit-new-image' ).length;
+		}
 		
 		var idsEdit, sheetEdit;
 		if ( names.modified ) {
@@ -1967,6 +1966,9 @@ var create = function( state ) {
 		}
 		if ( sheet.modified ) {
 			sheetEdit = sheet.save( summary ).fail( handleSaveError );
+			sheetEdit.then( sheet.getData ).then( function( blob ) {
+				overwriteSpritesheet( URL.createObjectURL( blob ) );
+			} );
 		}
 		
 		$.when( idsEdit, sheetEdit ).done( function() {
@@ -2163,6 +2165,7 @@ var create = function( state ) {
 			var $newBox = $boxTemplate.clone();
 			$newBox.find( 'code' ).text( this.name.trim().replace( /\.[^\.]+$/, '' ) );
 			scaleImage( this ).done( function( $img ) {
+				$img.addClass( 'spriteedit-new-image' );
 				$newBox.find( '.spritedoc-image' ).html( $img );
 			} );
 			
@@ -2963,7 +2966,7 @@ var create = function( state ) {
 						content.$oldImg.detach();
 					} else {
 						$box.addClass( 'spriteedit-new' );
-						content.$parent.children().css( 'display', 'none' );
+						content.$parent.find( '.sprite' ).addClass( 'spriteedit-replaced-image' );
 					}
 					content.$parent.append( content.$elem );
 					sheet.invalidate( true );
@@ -2971,7 +2974,7 @@ var create = function( state ) {
 				
 				case 'reset image':
 					content.$elem.detach();
-					content.$parent.children().css( 'display', '' );
+					content.$parent.find( '.sprite' ).removeClass( 'spriteedit-replaced-image' );
 					content.$parent.parent().removeClass( 'spriteedit-new' );
 					
 					if ( !$doc.find( '.spriteedit-new' ).length ) {
@@ -3303,6 +3306,9 @@ var create = function( state ) {
 				$( this ).data( 'pos', newPos ).removeData( 'new-pos' );
 			}
 		} );
+		
+		$doc.find( '.spriteedit-replaced-image' ).removeClass( 'spriteedit-replaced-image' );
+		$doc.find( '.spriteedit-replacing-image' ).remove();
 	};
 };
 
@@ -3689,6 +3695,26 @@ var findChangeTag = function( tag, options ) {
 		return foundActive;
 	} );
 };
+
+/**
+ * Replaces the spritesheet with the provided URL
+ * 
+ * It's assumed the URL will be an object URL, which it handles revoking
+ * if the spritesheet is replaced again.
+ */
+var overwriteSpritesheet = ( function() {
+	var inlineStyle;
+	return function( url ) {
+		if ( inlineStyle ) {
+			inlineStyle.disabled = true;
+			URL.revokeObjectURL( inlineStyle.url );
+		}
+		inlineStyle = mw.util.addCSS(
+			'#spritedoc .sprite { background-image: url(' + url + ') !important }'
+		);
+		inlineStyle.url = url;
+	};
+}() );
 
 /** Polyfills **/
 if ( !HTMLCanvasElement.prototype.toBlob ) {

@@ -149,6 +149,10 @@
 	cursor: pointer;
 }
 
+.sprite.spriteedit-replaced-image {
+	display: none;
+}
+
 .spriteedit-add-name {
 	position: absolute;
 	right: -3px;
