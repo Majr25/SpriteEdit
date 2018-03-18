@@ -181,6 +181,7 @@ var create = function( state ) {
 		settings.imageWidth = $sprite.width();
 		settings.imageHeight = $sprite.height();
 		settings.sheet = $doc.data( 'original-url' );
+		settings.spacing = $doc.data( 'spacing' );
 		if ( !settings.sheet ) {
 			settings.sheet = $sprite.css( 'background-image' )
 				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
@@ -1786,8 +1787,8 @@ var create = function( state ) {
 					} );
 					
 					if ( !unusedPos.length ) {
-						var imagesPerRow = settings.sheetWidth / settings.imageWidth;
-						settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * settings.imageHeight;
+						var imagesPerRow = ( settings.sheetWidth + settings.spacing ) / ( settings.imageWidth + settings.spacing );
+						settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * ( settings.imageHeight + settings.spacing ) - settings.spacing;
 						getCanvas( 'sheet' ).resize();
 					}
 				}
@@ -1823,12 +1824,15 @@ var create = function( state ) {
 						}
 						
 						var posPx = posToPx( pos );
+						// Clear previous image including spacing, just in-case
+						// someone manually uploaded an image overlapping the spacing
 						sheetCanvas.ctx.clearRect(
-							posPx.left,
-							posPx.top,
-							settings.imageWidth,
-							settings.imageHeight
+							posPx.left - settings.spacing,
+							posPx.top - settings.spacing,
+							settings.imageWidth + settings.spacing * 2,
+							settings.imageHeight + settings.spacing * 2
 						);
+						
 						sheetCanvas.ctx.drawImage( img, posPx.left, posPx.top );
 					} );
 					deferred.resolve( sheetCanvas.canvas.toDataURL() );
@@ -2134,11 +2138,12 @@ var create = function( state ) {
 	 * Converts a position to pixel co-ordinates on the sheet
 	 */
 	var posToPx = function( pos ) {
+		settings.imagesPerRow = settings.imagesPerRow ||
+			( settings.sheetWidth + settings.spacing ) / ( settings.imageWidth + settings.spacing );
 		pos -= 1;
-		var imagesPerRow = settings.sheetWidth / settings.imageWidth;
 		return {
-			left: pos % imagesPerRow * settings.imageWidth,
-			top: Math.floor( pos / imagesPerRow ) * settings.imageHeight,
+			left: pos % settings.imagesPerRow * ( settings.imageWidth + settings.spacing ),
+			top: Math.floor( pos / settings.imagesPerRow ) * ( settings.imageHeight + settings.spacing ),
 		};
 	};
 	
