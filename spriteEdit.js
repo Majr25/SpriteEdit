@@ -73,8 +73,6 @@ var imageEditingSupported = !!( window.FileList &&
 	window.ProgressEvent &&
 	URL && URL.revokeObjectURL && URL.createObjectURL &&
 	document.createElement( 'canvas' ).getContext );
-var dropSupported = 'draggable' in $root[0];
-var historySupported = window.history && history.pushState;
 // HTML pointer-events is dumb and can't be tested for
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
 var pointerEventsSupported = $.client.profile().name !== 'msie' || $.client.profile().versionBase > 10;
@@ -94,16 +92,14 @@ $( '#ca-spriteedit' ).find( 'a' ).click( function( e ) {
 	create();
 	e.preventDefault();
 } );
-if ( historySupported ) {
-	$win.on( 'popstate', function() {
-		if (
-			location.search.match( '[?&]spriteaction=edit' ) &&
-			!$root.hasClass( 'spriteedit-loaded' )
-		) {
-			create( 'history' );
-		}
-	} );
-}
+$win.on( 'popstate', function() {
+	if (
+		location.search.match( '[?&]spriteaction=edit' ) &&
+		!$root.hasClass( 'spriteedit-loaded' )
+	) {
+		create( 'history' );
+	}
+} );
 
 
 /** Functions **/
@@ -169,7 +165,7 @@ var create = function( state ) {
 	
 	$root.addClass( 'spriteedit-loaded' );
 	
-	if ( !state && historySupported ) {
+	if ( !state ) {
 		history.pushState( {}, '', mw.util.getUrl( null, { spriteaction: 'edit' } ) );
 	}
 	if ( state !== 'initial' ) {
@@ -381,16 +377,14 @@ var create = function( state ) {
 	} );
 	
 	// Handle closing the editor on navigation
-	if ( historySupported ) {
-		$win.on( 'popstate.spriteEdit', function() {
-			if (
-				!location.search.match( '[?&]spriteaction=edit' ) &&
-				$root.hasClass( 'spriteedit-loaded' )
-			) {
-				close( 'history' );
-			}
-		} );
-	}
+	$win.on( 'popstate.spriteEdit', function() {
+		if (
+			!location.search.match( '[?&]spriteaction=edit' ) &&
+			$root.hasClass( 'spriteedit-loaded' )
+		) {
+			close( 'history' );
+		}
+	} );
 	
 	
 	/**
@@ -871,7 +865,7 @@ var create = function( state ) {
 		} );
 		
 		// Drag and drop functionality
-		if ( dropSupported && imageEditingSupported ) {
+		if ( imageEditingSupported ) {
 			var dragTimeout, dragEnded;
 			var endDrag = function() {
 				$root.removeClass( 'spriteedit-dragging' );
@@ -3246,11 +3240,7 @@ var create = function( state ) {
 		$win.add( document ).off( '.spriteEdit' );
 		
 		if ( !leaveUrl ) {
-			if ( historySupported ) {
-				history.pushState( {}, '', mw.util.getUrl() );
-			} else if ( location.search.match( '[?&]spriteaction=edit' ) ) {
-				location = mw.util.getUrl();
-			}
+			history.pushState( {}, '', mw.util.getUrl() );
 		}
 		
 		var enabled = $root.hasClass( 'spriteedit-enabled' );
@@ -3303,7 +3293,7 @@ var create = function( state ) {
 			$( this ).remove();
 		} );
 		
-		$( '.spriteedit-new' ).removeClass( '.spriteedit-new' ).each( function() {
+		$( '.spriteedit-new' ).removeClass( 'spriteedit-new' ).each( function() {
 			var newPos = $( this ).data( 'new-pos' );
 			if ( newPos !== undefined ) {
 				$( this ).data( 'pos', newPos ).removeData( 'new-pos' );
