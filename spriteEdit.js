@@ -172,6 +172,7 @@ var create = function( state ) {
 		$( '#ca-view' ).add( '#ca-spriteedit' ).toggleClass( 'selected' );
 	}
 	
+	var sheetRequest;
 	if ( imageEditingSupported ) {
 		var $sprite = $doc.find( '.sprite' ).first();
 		settings.imageWidth = $sprite.width();
@@ -194,7 +195,7 @@ var create = function( state ) {
 		// be used for the background image, rather than the real URL.
 		// This works around the image being downloaded twice, probably
 		// caused by the background image not reusing the CORS request.
-		var sheetRequest = retryableRequest( function() {
+		sheetRequest = retryableRequest( function() {
 			var deferred = $.Deferred();
 			var requestTimeout;
 			var xhr = new XMLHttpRequest();
@@ -1135,7 +1136,7 @@ var create = function( state ) {
 						'#spriteedit-review-button',
 					], function() {
 						if ( $( this ).length ) {
-							$( this ).data( 'ooui-object' ).setDisabled( false )
+							$( this ).data( 'ooui-object' ).setDisabled( false );
 						}
 					} );
 				} );
@@ -2878,6 +2879,9 @@ var create = function( state ) {
 	var change = ( function() {
 		var queue = [];
 		var func = function( action, content, queueChange, oldChange ) {
+			var isBox;
+			var $box;
+			var $code;
 			switch ( action ) {
 				case 'edit':
 					if ( oldChange ) {
@@ -2893,7 +2897,7 @@ var create = function( state ) {
 				
 				case 'insert':
 					var moved = content.$elem.parent().length;
-					var isBox = content.$elem.hasClass( 'spritedoc-box' );
+					isBox = content.$elem.hasClass( 'spritedoc-box' );
 					var $oldBox = !isBox && content.$elem.closest( '.spritedoc-box' );
 					
 					if ( content.index === -1 ) {
@@ -2911,13 +2915,13 @@ var create = function( state ) {
 						}
 					} else if ( content.$elem.hasClass( 'spritedoc-name' ) ) {
 						if ( moved ) {
-							var $box = content.$elem.closest( '.spritedoc-box' );
+							$box = content.$elem.closest( '.spritedoc-box' );
 							if ( !$box.is( $oldBox ) ) {
 								updateBoxSorting( $oldBox );
 							}
 							updateBoxSorting( $box );
 						} else {
-							var $code = content.$elem.find( 'code' );
+							$code = content.$elem.find( 'code' );
 							updateName( undefined, $code.text(), $code );
 						}
 					}
@@ -2930,8 +2934,8 @@ var create = function( state ) {
 				break;
 				
 				case 'delete':
-					var isBox = content.$elem.hasClass( 'spritedoc-box' );
-					var $box = !isBox && content.$elem.closest( '.spritedoc-box' );
+					isBox = content.$elem.hasClass( 'spritedoc-box' );
+					$box = !isBox && content.$elem.closest( '.spritedoc-box' );
 					
 					content.$elem.detach();
 					
@@ -2941,7 +2945,7 @@ var create = function( state ) {
 						} );
 						sheet.invalidate( !!$doc.find( '.spriteedit-new' ).length );
 					} else if ( content.$elem.hasClass( 'spritedoc-name' ) ) {
-						var $code = content.$elem.find( 'code' );
+						$code = content.$elem.find( 'code' );
 						updateName( $code.text(), undefined, $code );
 						updateBoxSorting( $box );
 					}
@@ -2950,7 +2954,7 @@ var create = function( state ) {
 				break;
 				
 				case 'replace image':
-					var $box = content.$parent.parent();
+					$box = content.$parent.parent();
 					if ( content.$oldImg && content.$oldImg.length ) {
 						content.$oldImg.detach();
 					} else {
