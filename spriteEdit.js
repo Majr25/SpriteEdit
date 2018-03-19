@@ -1321,11 +1321,11 @@ var create = function( state ) {
 					makeButton( i18n.ctxDownloadImage, {
 						icon: 'download',
 						action: function() {
-							var url;
+							var data;
 							var $box = $parent.parent();
-							// Already an image, just pass on the URL
+							// Already an image, just pass on the object URL
 							if ( $box.hasClass( 'spriteedit-new' ) ) {
-								url = $parent.find( '> img' ).attr( 'src' );
+								data = $parent.find( '> img' ).attr( 'src' );
 							} else {
 								// Individual sprite needs to be extracted from the spritesheet
 								var width = settings.imageWidth;
@@ -1339,15 +1339,24 @@ var create = function( state ) {
 									0, 0, width, height
 								);
 								
-								url = imgCanv.canvas.toDataURL();
+								data = $.Deferred();
+								imgCanv.canvas.toBlob( data.resolve );
 							}
 							
-							var dlLink = $( '<a>' ).attr( {
-								href: url,
-								download: $box.data( 'sort-key' ) + '.png',
-							} ).appendTo( 'body' );
-							dlLink[0].click();
-							dlLink.remove();
+							$.when( data ).then( function( blob ) {
+								var name = $box.data( 'sort-key' ) + '.png';
+								// IE10+: (has Blob, but not a[download])
+								if ( navigator.msSaveBlob ) {
+									return navigator.msSaveBlob( blob, name );
+								}
+								
+								var dlLink = $( '<a>' ).attr( {
+									href: URL.createObjectURL( blob ),
+									download: name,
+								} ).appendTo( 'body' );
+								dlLink[0].click();
+								dlLink.remove();
+							} );
 						},
 					} ),
 					makeButton( i18n.ctxDeleteImage, {
@@ -1685,7 +1694,7 @@ var create = function( state ) {
 							// If there's already been an edit conflict, just allow the edit
 							// through conflict-free, as it's already annoying enough to
 							// deal with one conflict.
-							basetimestamp: !conflict ? $doc.data( 'idstimestamp' ): undefined,
+							basetimestamp: !conflict ? $doc.data( 'idstimestamp' ) : undefined,
 							summary: summary,
 							tags: canTag ? 'spriteeditor' : undefined,
 							utf8: true,
@@ -2261,7 +2270,9 @@ var create = function( state ) {
 				scaledImg.onload = function() {
 					deferred.resolve( $( scaledImg ) );
 				};
-				scaledImg.src = scaler.canvas.toDataURL();
+				scaler.canvas.toBlob( function( blob ) {
+					scaledImg.src = URL.createObjectURL( blob );
+				} );
 			};
 			img.src = URL.createObjectURL( file );
 			
