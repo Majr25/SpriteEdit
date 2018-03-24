@@ -1158,12 +1158,8 @@ var create = function( state ) {
 				var $remove, $parent;
 				if ( $this.hasClass( 'mw-headline' ) ) {
 					if ( $doc.find( '.spritedoc-section' ).length === 1 ) {
-						change( 'text', {
-							$elem: $this,
-							oldText: origText,
-							text: i18n.sectionUncategorized,
-						} );
-						return;
+						text = i18n.sectionUncategorized;
+						$this.text( text );
 					} else {
 						$remove = $this.closest( '.spritedoc-section' );
 						$parent = $doc;
@@ -1179,22 +1175,24 @@ var create = function( state ) {
 					}
 				}
 				
-				if ( $this.hasClass( 'spriteedit-new' ) ) {
-					// Just pretend it never happened
-					$remove.remove();
-					change.discard();
+				if ( $remove ) {
+					if ( $this.hasClass( 'spriteedit-new' ) ) {
+						// Just pretend it never happened
+						$remove.remove();
+						change.discard();
+						return;
+					}
+					
+					// Restore original text before deleting so undo works
+					$this.text( origText );
+					
+					change( 'delete', {
+						$elem: $remove,
+						index: $remove.index() - 1,
+						$parent: $parent,
+					} );
 					return;
 				}
-				
-				// Restore original text before deleting so undo works
-				$this.text( origText );
-				
-				change( 'delete', {
-					$elem: $remove,
-					index: $remove.index() - 1,
-					$parent: $parent,
-				} );
-				return;
 			}
 			
 			if ( text === origText ) {
@@ -2997,6 +2995,10 @@ var create = function( state ) {
 					content.$elem.toggleClass( 'spritedoc-deprecated' );
 					
 					names.invalidate( true );
+				break;
+				
+				default:
+					console.error( 'Invalid action: `%s`', action );
 				break;
 			}
 			

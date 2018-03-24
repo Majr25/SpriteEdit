@@ -115,6 +115,10 @@
 	    flex: none;
 }
 
+#spritedoc .mw-headline {
+	display: inline-block;
+}
+
 .spritedoc-box:hover {
 	z-index: 1;
 }
