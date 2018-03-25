@@ -386,14 +386,17 @@
 }
 
 .spriteedit-sheet-diff {
-	white-space: nowrap;
+	display: -webkit-box;
+	display: -ms-flexbox;
+	display: flex;
+}
+.spriteedit-sheet-diff img {
+	width: 100%;
 }
 .spriteedit-old-sheet,
 .spriteedit-new-sheet {
 	display: inline-block;
 	padding: 1em;
-	text-align: center;
-	vertical-align: top;
 }
 .spriteedit-new-sheet {
 	background-color: #D8ECFF;
