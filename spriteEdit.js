@@ -49,6 +49,8 @@ var i18n = {
 	sectionPlaceholder: 'Type a section name',
 	sectionUncategorized: 'Uncategorized',
 	titleEditing: 'Sprite editing $1',
+	toolbarHelp: 'Help',
+	toolbarHelpPage: 'Help:Sprite editor',
 	toolbarNewImage: 'New image',
 	toolbarNewSection: 'New section',
 	toolbarRedo: 'Redo',
@@ -608,6 +610,11 @@ var create = function( state ) {
 			label: i18n.toolbarNewImage,
 		} );
 		newImageButton.$element.data( 'ooui-object', newImageButton );
+		if ( !imageEditingSupported ) {
+			newImageButton.setDisabled( true ).$element
+				.prop( 'title', i18n.browserActionNotSupported )
+				.css( 'cursor', 'help' );
+		}
 		
 		var saveButton = new OO.ui.ButtonInputWidget( {
 			id: 'spriteedit-save',
@@ -625,6 +632,15 @@ var create = function( state ) {
 		} );
 		toolboxSelect.$element.data( 'ooui-object', toolboxSelect );
 		
+		var helpButton = new OO.ui.ButtonWidget( {
+			id: 'spriteedit-help',
+			framed: false,
+			icon: 'help',
+			title: i18n.toolbarHelp,
+			href: mw.util.getUrl( i18n.toolbarHelpPage ),
+			target: '_blank',
+		} );
+		
 		$toolbar.append(
 			new OO.ui.ButtonGroupWidget( {
 				items: [ undoButton, redoButton ],
@@ -633,13 +649,9 @@ var create = function( state ) {
 				items: [ newSectionButton, newImageButton ],
 			} ).$element,
 			toolboxSelect.$element,
-			saveButton.$element
+			saveButton.$element,
+			helpButton.$element
 		);
-		if ( !imageEditingSupported ) {
-			newImageButton.setDisabled( true ).$element
-				.prop( 'title', i18n.browserActionNotSupported )
-				.css( 'cursor', 'help' );
-		}
 		
 		// Create tools
 		var $toolbox = $toolbar.find( '#spriteedit-toolbox' );
