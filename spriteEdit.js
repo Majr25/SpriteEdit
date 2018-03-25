@@ -65,6 +65,7 @@ var i18n = {
 };
 var $root = $( document.documentElement );
 var $win = $( window );
+var $body = $( document.body );
 var $doc = $( '#spritedoc' );
 var URL = window.URL || window.webkitURL;
 var imageEditingSupported = !!( window.FileList &&
@@ -2410,7 +2411,7 @@ var create = function( state ) {
 		$dialog.append( $panel );
 		
 		if ( $overlay ) {
-			$( document.body ).append( $overlay );
+			$body.append( $overlay );
 		} else {
 			$overlay = $dialog.parent();
 		}
@@ -2600,23 +2601,23 @@ var create = function( state ) {
 			$tooltip = $( '<div>' ).addClass( 'spriteedit-tooltip' ).append(
 				$( '<div>' ).addClass( 'spriteedit-tooltip-text' ).append( content ),
 				$( '<div>' ).addClass( 'spriteedit-tooltip-arrow' )
-			).appendTo( $doc );
+			).appendTo( document.body );
 			
 			if ( config.class ) {
 				$tooltip.addClass( config.class );
 			}
 			
 			var anchorPos = $anchor.offset();
-			var docPos = $doc.offset();
+			var bodyPos = $body.offset();
 			if ( config.horizontal ) {
 				$tooltip.addClass( 'spriteedit-tooltip-horizontal' ).css( {
-					top: anchorPos.top - docPos.top + $anchor.outerHeight() / 2,
-					left: anchorPos.left - docPos.left - $tooltip.outerWidth(),
+					top: anchorPos.top - bodyPos.top + $anchor.outerHeight() / 2,
+					left: anchorPos.left - bodyPos.left - $tooltip.outerWidth(),
 				} );
 			} else {
 				$tooltip.css( {
-					top: anchorPos.top - docPos.top - $tooltip.outerHeight(),
-					left: anchorPos.left - docPos.left + $anchor.outerWidth() / 2,
+					top: anchorPos.top - bodyPos.top - $tooltip.outerHeight(),
+					left: anchorPos.left - bodyPos.left + $anchor.outerWidth() / 2,
 				} );
 			}
 			
