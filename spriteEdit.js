@@ -1078,6 +1078,7 @@ var create = function( state ) {
 						sheetChanges = $.Deferred();
 						var newSpritesheet = new Image();
 						newSpritesheet.onload = function() {
+							newSpritesheet.onload = null;
 							$changesText.find( '.spriteedit-sheet-changes' ).append(
 								$( '<div>' ).text( i18n.panelChangesSheetTitle ),
 								$( '<div>' ).addClass( 'spriteedit-sheet-diff' ).append(
