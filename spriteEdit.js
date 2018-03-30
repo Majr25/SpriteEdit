@@ -186,10 +186,7 @@ var create = function( state ) {
 				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
 			$doc.data( 'original-url', settings.sheet );
 		}
-		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + Date.now();
-		
-		// Cloudfront doesn't allow CORS, so temporarily go through a server that does
-		settings.sheet = 'https://matt-russell.com/cloudfront.php?url=' + encodeURIComponent( settings.sheet );
+		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + 'version=' + Date.now();
 		
 		// Replace the spritesheet with a fresh uncached one to ensure
 		// we don't save over it with an old version.
