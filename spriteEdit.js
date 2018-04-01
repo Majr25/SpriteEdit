@@ -2181,7 +2181,7 @@ var create = function( state ) {
 			}
 			
 			var $newBox = $boxTemplate.clone();
-			$newBox.find( 'code' ).text( this.name.trim().replace( /\.[^\.]+$/, '' ) );
+			$newBox.find( 'code' ).text( this.name.trim().replace( /\.[^\.]+$/, '' ).replace( /_/g, ' ' ) );
 			scaleImage( this ).done( function( $img ) {
 				$img.addClass( 'spriteedit-new-image' );
 				$newBox.find( '.spritedoc-image' ).html( $img );
