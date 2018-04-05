@@ -24,12 +24,18 @@ var i18n = {
 	luaKeyDeprecated: 'deprecated',
 	luaKeyId: 'id',
 	luaKeyIds: 'ids',
+	luaKeyName: 'name',
 	luaKeyPos: 'pos',
 	luaKeySection: 'section',
 	luaKeySections: 'sections',
+	luaKeySettings: 'settings',
+	luaKeySettingsHeight: 'height',
+	luaKeySettingsPos: 'pos',
+	luaKeySettingsSpacing: 'spacing',
+	luaKeySettingsWidth: 'width',
 	namePlaceholder: 'Type a name',
 	noPermissionNotice: 'You do not have permission to edit this sprite.',
-	panelChangesIdTitle: 'ID changes',
+	panelChangesIdTitle: 'Data changes',
 	panelChangesNoDiffFromCur: 'No changes from current revision.',
 	panelChangesSheetTitle: 'Spritesheet changes',
 	panelChangesTitle: 'Review your changes',
@@ -56,8 +62,8 @@ var i18n = {
 	toolbarRedo: 'Redo',
 	toolbarReviewChanges: 'Review changes',
 	toolbarSave: 'Save',
-	toolbarSummaryPlaceholder: 'Summarize the changes you made',
 	toolbarSummaryLabelTip: 'The number of bytes remaining',
+	toolbarSummaryPlaceholder: 'Summarize the changes you made',
 	toolbarToolDeprecate: 'Deprecate',
 	toolbarToolDeprecateTip: 'Toggle names as deprecated',
 	toolbarTools: 'Tools',
@@ -115,7 +121,6 @@ $win.on( 'popstate', function() {
  */
 var create = function( state ) {
 	var $doc = $( '#spritedoc' );
-	var idsPageId = $doc.data( 'idspage' );
 	var preventClose;
 	var settings = {};
 	var mouse = {
@@ -125,6 +130,8 @@ var create = function( state ) {
 	var sorting = false;
 	var oldHtml;
 	var spritesheet;
+	var spriteSettings = JSON.parse( $doc.attr( 'data-settings' ) );
+	var dataPage = $doc.data( 'datapage' );
 	var changes = [];
 	var undoneChanges = [];
 	var usedNames = {};
@@ -179,10 +186,10 @@ var create = function( state ) {
 	var sheetRequest;
 	if ( imageEditingSupported ) {
 		var $sprite = $doc.find( '.sprite' ).first();
-		settings.imageWidth = $sprite.width();
-		settings.imageHeight = $sprite.height();
+		settings.imageWidth = spriteSettings[i18n.luaKeySettingsWidth];
+		settings.imageHeight = spriteSettings[i18n.luaKeySettingsHeight];
+		settings.spacing = spriteSettings[i18n.luaKeySettingsSpacing];
 		settings.sheet = $doc.data( 'original-url' );
-		settings.spacing = $doc.data( 'spacing' );
 		if ( !settings.sheet ) {
 			settings.sheet = $sprite.css( 'background-image' )
 				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
@@ -225,30 +232,11 @@ var create = function( state ) {
 				deferred.reject( 'http', { textStatus: 'timeout' } );
 			}, 30 * 1000 );
 			
-			var errorCallback = xhr.onerror = function() {
+			xhr.onabort = xhr.onerror = function() {
 				if ( deferred.state() === 'pending' ) {
 					deferred.reject( 'http', { textStatus: 'error' } );
 				}
 			};
-			// Support: IE 9 only
-			// Use onreadystatechange to replace onabort
-			// to handle uncaught aborts
-			if ( xhr.onabort !== undefined ) {
-				xhr.onabort = errorCallback;
-			} else {
-				xhr.onreadystatechange = function() {
-					// Check readyState before timeout as it changes
-					if ( xhr.readyState === 4 ) {
-						// Allow onerror to be called first,
-						// but that will not handle a native abort
-						// Also, save errorCallback to a variable
-						// as xhr.onerror cannot be accessed
-						window.setTimeout( function() {
-							errorCallback();
-						} );
-					}
-				};
-			}
 			xhr.send();
 			
 			return deferred.promise( { abort: function() {
@@ -263,7 +251,7 @@ var create = function( state ) {
 	var infoRequest = retryableRequest( function() {
 		return revisionsApi.get( {
 			rvprop: 'timestamp',
-			pageids: idsPageId,
+			titles: dataPage,
 			meta: 'siteinfo|userinfo',
 			uiprop: 'rights|blockinfo',
 		} );
@@ -275,7 +263,7 @@ var create = function( state ) {
 	// documentation page, and re-download it if necessary
 	var contentRequest = infoRequest.then( function( data ) {
 		var currentTimestamp = fixTimestamp( data.query.pages[0].revisions[0].timestamp );
-		if ( currentTimestamp > $doc.data( 'idstimestamp' ) ) {
+		if ( currentTimestamp > $doc.data( 'datatimestamp' ) ) {
 			var newContent = retryableRequest( function() {
 				return parseApi.get( {
 					title: mw.config.get( 'wgPageName' ),
@@ -288,7 +276,7 @@ var create = function( state ) {
 				$doc.replaceWith( oldHtml );
 				$doc = $( '#spritedoc' );
 				spriteSettings = JSON.parse( $doc.attr( 'data-settings' ) );
-				idsPageId = $doc.data( 'idspage' );
+				dataPage = $doc.data( 'datapage' );
 			} );
 			
 			return newContent;
@@ -321,7 +309,7 @@ var create = function( state ) {
 			} );
 		} else {
 			var rights = info.rights;
-			$.each( [ 'ids', 'sprite' ], function() {
+			$.each( [ 'data', 'sprite' ], function() {
 				var requiredRights = $doc.data( this + 'protection' ).split( ',' );
 				$.each( requiredRights, function() {
 					if ( rights.indexOf( this ) === -1 ) {
@@ -1529,12 +1517,12 @@ var create = function( state ) {
 				}
 			},
 			/**
-			 * Returns the names Lua table
+			 * Returns the names object
 			 */
-			getTable: function() {
-				var deferred = makeDeferred( 'table' );
+			getObject: function() {
+				var deferred = makeDeferred( 'object' );
 				if ( !deferred ) {
-					return promises.table;
+					return promises.object;
 				}
 				
 				sheet.updatePositions().done( function() {
@@ -1576,9 +1564,10 @@ var create = function( state ) {
 						var $section = $( this );
 						var sectionId = $section.data( 'section-id' ) || getSectionId();
 						var sectionName = $section.find( '.mw-headline' ).text().replace( /\s+/g, ' ' );
-						headingRows.push(
-							'{ ' + luaStringQuote( sectionName ) + ', ' + luaKeyQuote( i18n.luaKeyId ) + ' = ' + sectionId + ' },'
-						);
+						var row = {};
+						row[i18n.luaKeyName] = sectionName;
+						row[i18n.luaKeyId] = sectionId;
+						headingRows.push( row );
 						
 						$section.find( '.spritedoc-box' ).each( function() {
 							var $box = $( this );
@@ -1603,32 +1592,45 @@ var create = function( state ) {
 						return a.sortKey > b.sortKey ? 1 : -1;
 					} );
 					
-					var idsRows = [];
+					var idsRows = {};
 					$.each( ids, function() {
-						var idData = [
-							luaKeyQuote( i18n.luaKeyPos ) + ' = ' + this.pos,
-							luaKeyQuote( i18n.luaKeySection ) + ' = ' + this.section,
-						];
+						var idData = {};
+						idData[i18n.luaKeyPos] = this.pos;
+						idData[i18n.luaKeySection] = this.section;
 						if ( this.deprecated ) {
-							idData.push( luaKeyQuote( i18n.luaKeyDeprecated ) + ' = true' );
+							idData[i18n.luaKeyDeprecated] = this.deprecated;
 						}
-						
-						idsRows.push(
-							'[' + luaStringQuote( this.id ) + '] = ' +
-							'{ ' + idData.join( ', ' ) + ' },'
-						);
+						idsRows[this.id] = idData;
 					} );
 					
-					deferred.resolve( [
-						'return {',
-						'	' + luaKeyQuote( i18n.luaKeySections ) + ' = {',
-						'		' + headingRows.join( '\n\t\t' ),
-						'	},',
-						'	' + luaKeyQuote( i18n.luaKeyIds ) + ' = {',
-						'		' + idsRows.join( '\n\t\t' ),
-						'	}',
-						'}',
-					].join( '\n' ) );
+					// Sort the settings object so it doesn't change order
+					// everytime due to lua not supporting ordered tables
+					var sortedSettings = {};
+					Object.keys( spriteSettings ).sort().forEach( function( key ) {
+						sortedSettings[key] = spriteSettings[key];
+					} );
+					
+					var table = {};
+					table[i18n.luaKeySettings] = sortedSettings;
+					table[i18n.luaKeySections] = headingRows;
+					table[i18n.luaKeyIds] = idsRows;
+					
+					deferred.resolve( table );
+				} );
+				
+				return promises.object;
+			},
+			/**
+			 * Returns the names Lua table
+			 */
+			getTable: function() {
+				var deferred = makeDeferred( 'table' );
+				if ( !deferred ) {
+					return promises.table;
+				}
+				
+				names.getObject().then( function( obj ) {
+					deferred.resolve( 'return ' + luaTable.create( obj ) );
 				} );
 				
 				return promises.table;
@@ -1657,7 +1659,7 @@ var create = function( state ) {
 						} ).post( {
 							action: 'query',
 							prop: 'revisions',
-							pageids: idsPageId,
+							titles: dataPage,
 							rvprop: '',
 							rvdifftotext: table,
 							rvlimit: 1,
@@ -1694,12 +1696,12 @@ var create = function( state ) {
 						} ).postWithToken( 'csrf', {
 							action: 'edit',
 							nocreate: true,
-							pageid: idsPageId,
+							title: dataPage,
 							text: table,
 							// If there's already been an edit conflict, just allow the edit
 							// through conflict-free, as it's already annoying enough to
 							// deal with one conflict.
-							basetimestamp: !conflict ? $doc.data( 'idstimestamp' ) : undefined,
+							basetimestamp: !conflict ? $doc.data( 'datatimestamp' ) : undefined,
 							summary: summary,
 							tags: canTag ? 'spriteeditor' : undefined,
 							formatversion: 2,
@@ -1767,7 +1769,7 @@ var create = function( state ) {
 					return promises.pos;
 				}
 				
-				var lastPos = $doc.data( 'pos' );
+				var lastPos = spriteSettings[i18n.luaKeySettingsPos] || 1;
 				var usedPos = {};
 				usedPos[lastPos] = true;
 				
@@ -1958,36 +1960,30 @@ var create = function( state ) {
 			refresh = !!$( '.spriteedit-new-image' ).length;
 		}
 		
-		var idsEdit, sheetEdit;
-		if ( names.modified ) {
-			// Wait for image upload before saving text
-			idsEdit = sheet.stash().then( function() {
-				return names.save( summary, conflict );
-			} ).then( function( data ) {
-				// Null edit, nothing to do here
-				if ( data.edit.nochange ) {
-					return;
-				}
-				
-				$doc.data( 'idstimestamp', fixTimestamp( data.edit.newtimestamp ) );
-				
-				// Purge this page so the changes show up immediately
-				retryableRequest( function() {
-					return new mw.Api().post( {
-						action: 'purge',
-						pageids: mw.config.get( 'wgArticleId' ),
-					} );
+		sheet.save( summary ).then( function() {
+			return names.save( summary, conflict );
+		} ).then( function( data ) {
+			if ( sheet.modified ) {
+				sheet.getData().then( function( blob ) {
+					overwriteSpritesheet( URL.createObjectURL( blob ) );
 				} );
-			}, handleSaveError );
-		}
-		if ( sheet.modified ) {
-			sheetEdit = sheet.save( summary ).fail( handleSaveError );
-			sheetEdit.then( sheet.getData ).then( function( blob ) {
-				overwriteSpritesheet( URL.createObjectURL( blob ) );
+			}
+			
+			// Null edit, nothing to do here
+			if ( !data || data.edit.nochange ) {
+				return;
+			}
+			
+			$doc.data( 'datatimestamp', fixTimestamp( data.edit.newtimestamp ) );
+			
+			// Purge this page so the changes show up immediately
+			retryableRequest( function() {
+				return new mw.Api().post( {
+					action: 'purge',
+					pageids: mw.config.get( 'wgArticleId' ),
+				} );
 			} );
-		}
-		
-		$.when( idsEdit, sheetEdit ).done( function() {
+		} ).then( function() {
 			var newContent;
 			if ( refresh ) {
 				newContent = retryableRequest( function() {
@@ -2009,7 +2005,7 @@ var create = function( state ) {
 				
 				mw.hook( 'postEdit' ).fire( { message: i18n.changesSavedNotice } );
 			} );
-		} );
+		}, handleSaveError );
 	};
 	
 	/**
@@ -2105,7 +2101,7 @@ var create = function( state ) {
 			names.getTable(),
 			names.getDiff(),
 			retryableRequest( function() {
-				return revisionsApi.get( { pageids: idsPageId } );
+				return revisionsApi.get( { titles: dataPage } );
 			} )
 		).then( function( table, diff, curTextData ) {
 			// TODO: Change to MultilineTextInputWidget on MW 1.30
@@ -3501,36 +3497,6 @@ var fixTimestamp = function( timestamp ) {
 fixTimestamp.offset = 0;
 
 /**
- * Quote a string for lua table
- *
- * Uses either ' or " as the delimiter (depending on which is least used in the string),
- * then escapes \ and the chosen delimiter within the string.
- */
-var luaStringQuote = function( str ) {
-	var quotes = ( str.match( /"/g ) || [] ).length;
-	var apostrophies = ( str.match( /'/g ) || [] ).length;
-	var delim = "'";
-	var delimRegex = /'/g;
-	if ( apostrophies > quotes ) {
-		delim = '"';
-		delimRegex = /"/g;
-	}
-	
-	return delim + str.replace( /\\/g, '\\\\' ).replace( delimRegex, '\\' + delim ) + delim;
-};
-
-/**
- * Returns a lua key with quotes and brackets if necessary
- */
-var luaKeyQuote = function( str ) {
-	if ( str.match( /^[a-z_]\w*$/i ) ) {
-		return str;
-	}
-	
-	return '[' + luaStringQuote( str ) + ']';
-};
-
-/**
  * Add various types of in-page controls to a set of elements
  *
  * "$elems" is a jQuery object containing the elements to add controls to.
@@ -3744,6 +3710,132 @@ var overwriteSpritesheet = ( function() {
 		inlineStyle.url = url;
 	};
 }() );
+var luaTable = {};
+/** Recursively creates a pretty printed lua table from an object
+ * 
+ * Supports only the value which `luaTable.createValue` supports, and
+ * only numbers and strings as keys.
+ * 
+ * Objects with less than 4 keys and with no sub-objects will be
+ * on a single line, otherwise will be one line per value.
+ */
+luaTable.create = function( obj, indent ) {
+	indent = indent || 1;
+	var out = [ '{' ];
+	var isArray = Array.isArray( obj );
+	var size = isArray ? obj.length : Object.keys( obj ).length;
+	var containsObject;
+	$.each( obj, function( k, v ) {
+		if ( typeof v === 'object' ) {
+			containsObject = true;
+			return false;
+		}
+	} );
+	var multiline = containsObject || size > 3;
+	
+	$.each( obj, function( k, v ) {
+		if ( v === null || v === undefined ) {
+			return;
+		}
+		var key = isArray ? '' : luaTable.createKey( k ) + ' = ';
+		out.push( '\t'.repeat( multiline * indent ) + key + luaTable.createValue( v, indent + 1 ) + ',' );
+	} );
+	// No trailing commas for single line objects
+	if ( !multiline ) {
+		out.push( out.pop().slice( 0, -1 ) );
+	}
+	out.push( '\t'.repeat( multiline * --indent ) + '}' );
+	
+	return out.join( multiline ? '\n' : ' ' );
+};
+/** Allows creating a string that should be considered a lua function
+ * 
+ * "funcStr" should be the exact value to be output as
+ * in the table.
+ * 
+ * Returns a function that will be converted back in to
+ * the specified string when building the table.
+ */
+luaTable.func = function( funcStr ) {
+	var f = function() {
+		return funcStr;
+	};
+	f.luaFunc = true;
+	return f;
+};
+/**
+ * List of reserved keywords in lua
+ */
+luaTable.keywords = [
+	'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
+	'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return', 'then',
+	'true', 'until', 'while',
+];
+/**
+ * Returns a lua key with quotes and brackets if necessary
+ * 
+ * Only supports numbers and strings.
+ */
+luaTable.createKey = function( key ) {
+	if ( key.match( /^-?\d+(\.\d+)?$/ ) ) {
+		return '[' + Number( key ) + ']';
+	}
+	if ( luaTable.keywords.indexOf( key ) < 0 && !key.match( /^[^a-z_]|\W/i ) ) {
+		return key;
+	}
+	
+	return '[' + luaTable.createString( key ) + ']';
+};
+/**
+ * Create a lua table value
+ * 
+ * Only supports the types in the switch, and only functions created with
+ * `luaTable.func` are supported.
+ * Will recursively resolve object values.
+ */
+luaTable.createValue = function( val, indent ) {
+	switch ( typeof val ) {
+		case 'number':
+		case 'boolean':
+			return val;
+		case 'string':
+			return luaTable.createString( val );
+		case 'object':
+			return luaTable.create( val, indent );
+		case 'function':
+			// If the function is supposed to be a lua function,
+			// execute it to get the lua function string and
+			// return it directly, otherwise invalid type
+			if ( val.luaFunc ) {
+				return val();
+			}
+		default:
+			throw new TypeError( 'Lua table: Invalid value type: ' + typeof val );
+	}
+};
+/**
+ * Quote a string for lua table
+ *
+ * Uses either ' or " as the delimiter (depending on which is least used in the string),
+ * then escapes \ and the chosen delimiter within the string.
+ */
+luaTable.createString = function( str ) {
+	if ( !str ) {
+		return "''";
+	}
+	var delim, delimRegex;
+	var quotes = ( str.match( /"/g ) || '' ).length;
+	var apostrophies = ( str.match( /'/g ) || '' ).length;
+	if ( apostrophies > quotes ) {
+		delim = '"';
+		delimRegex = /"/g;
+	} else {
+		delim = "'";
+		delimRegex = /'/g;
+	}
+	
+	return delim + str.replace( /\\/g, '\\\\' ).replace( delimRegex, '\\' + delim ) + delim;
+};
 
 /** Polyfills **/
 if ( !HTMLCanvasElement.prototype.toBlob ) {
