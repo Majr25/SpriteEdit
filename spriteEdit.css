@@ -198,7 +198,7 @@
 	background-color: #FFC7CE !important;
 }
 
-#spritedoc .spriteedit-ghost {
+.spriteedit-ghost {
 	position: fixed !important;
 	z-index: 999;
 	opacity: 0.8;
@@ -209,7 +209,7 @@
 	outline: 1px dashed #000;
 }
 
-#spritedoc .spriteedit-processing {
+.spriteedit-processing {
 	background-size: 1em 1em;
 	background-image: -webkit-linear-gradient(
 		45deg,

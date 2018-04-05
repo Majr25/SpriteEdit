@@ -32,6 +32,7 @@ var i18n = {
 	luaKeySettingsHeight: 'height',
 	luaKeySettingsPos: 'pos',
 	luaKeySettingsSpacing: 'spacing',
+	luaKeySettingsUrl: 'url',
 	luaKeySettingsWidth: 'width',
 	namePlaceholder: 'Type a name',
 	noPermissionNotice: 'You do not have permission to edit this sprite.',
@@ -181,71 +182,6 @@ var create = function( state ) {
 		$( '#ca-view' ).add( '#ca-spriteedit' ).toggleClass( 'selected' );
 	}
 	
-	// Replace the spritesheet with a fresh uncached one to ensure
-	// we don't save over it with an old version.
-	var sheetRequest;
-	if ( imageEditingSupported ) {
-		var $sprite = $doc.find( '.sprite' ).first();
-		settings.imageWidth = spriteSettings[i18n.luaKeySettingsWidth];
-		settings.imageHeight = spriteSettings[i18n.luaKeySettingsHeight];
-		settings.spacing = spriteSettings[i18n.luaKeySettingsSpacing];
-		settings.sheet = $doc.data( 'original-url' );
-		if ( !settings.sheet ) {
-			settings.sheet = $sprite.css( 'background-image' )
-				.replace( /^url\(["']?/, '' ).replace( /["']?\)$/, '' );
-			$doc.data( 'original-url', settings.sheet );
-		}
-		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + 'version=' + Date.now();
-		
-		// XHR is used instead of a CORS Image so a blob URL can
-		// be used for the background image, rather than the real URL.
-		// This works around the image being downloaded twice, probably
-		// caused by the background image not reusing the CORS request.
-		sheetRequest = retryableRequest( function() {
-			var deferred = $.Deferred();
-			var requestTimeout;
-			var xhr = new XMLHttpRequest();
-			xhr.open( 'GET', settings.sheet, true );
-			xhr.responseType = 'blob';
-			xhr.onload = function() {
-				clearTimeout( requestTimeout );
-				if ( this.status !== 200 ) {
-					deferred.reject( 'http', {
-						textStatus: this.statusText ? this.status + ' ' + this.statusText : 'error'
-					} );
-					return;
-				}
-				
-				spritesheet = new Image();
-				spritesheet.onload = function() {
-					settings.sheetWidth = this.width;
-					settings.sheetHeight = this.height;
-					
-					overwriteSpritesheet( this.src );
-					
-					deferred.resolve();
-				};
-				spritesheet.src = URL.createObjectURL( this.response );
-			};
-			requestTimeout = setTimeout( function() {
-				xhr.abort();
-				deferred.reject( 'http', { textStatus: 'timeout' } );
-			}, 30 * 1000 );
-			
-			xhr.onabort = xhr.onerror = function() {
-				if ( deferred.state() === 'pending' ) {
-					deferred.reject( 'http', { textStatus: 'error' } );
-				}
-			};
-			xhr.send();
-			
-			return deferred.promise( { abort: function() {
-				deferred.reject( 'http', { textStatus: 'abort' } );
-				xhr.abort();
-			} } );
-		} );
-	}
-	
 	// Get some info about this wiki, the user's rights and
 	// block status, and the last edit timestamp for the ids page
 	var infoRequest = retryableRequest( function() {
@@ -335,11 +271,80 @@ var create = function( state ) {
 			sheetRequest && sheetRequest.abort();
 			contentRequest.abort && contentRequest.abort();
 			
-			destroy();
+			destroy( true );
 		}
 	} );
 	
-	$.when( sheetRequest, contentRequest, permissionsRequest ).then( function() {
+	// Replace the spritesheet with a fresh uncached one to ensure
+	// we don't save over it with an old version.
+	var sheetRequest;
+	if ( imageEditingSupported ) {
+		sheetRequest = contentRequest.then( function() {
+			var $sprite = $doc.find( '.sprite' ).first();
+			settings.imageWidth = spriteSettings[i18n.luaKeySettingsWidth];
+			settings.imageHeight = spriteSettings[i18n.luaKeySettingsHeight];
+			settings.spacing = spriteSettings[i18n.luaKeySettingsSpacing];
+			settings.sheet = $doc.data( 'original-url' );
+			if ( !settings.sheet ) {
+				// Get a capture of the whole URL, and of the URL minus the query string
+				var urlParts = $sprite.css( 'background-image' )
+					.match( /^url\(["']?(([^?"]+)(?:\?[^"]+)?)["']?\)$/ );
+				$doc.data( 'original-url', urlParts[1] );
+				settings.sheet = urlParts[2] + '?version=' + Date.now();
+				$doc.data( 'url', settings.sheet );
+			}
+			
+			// XHR is used instead of a CORS Image so a blob URL can
+			// be used for the background image, rather than the real URL.
+			// This works around the image being downloaded twice, probably
+			// caused by the background image not reusing the CORS request.
+			return retryableRequest( function() {
+				var deferred = $.Deferred();
+				var requestTimeout;
+				var xhr = new XMLHttpRequest();
+				xhr.open( 'GET', settings.sheet, true );
+				xhr.responseType = 'blob';
+				xhr.onload = function() {
+					clearTimeout( requestTimeout );
+					if ( this.status !== 200 ) {
+						deferred.reject( 'http', {
+							textStatus: this.statusText ? this.status + ' ' + this.statusText : 'error'
+						} );
+						return;
+					}
+					
+					spritesheet = new Image();
+					spritesheet.onload = function() {
+						settings.sheetWidth = this.width;
+						settings.sheetHeight = this.height;
+						
+						overwriteSpritesheet( this.src );
+						
+						deferred.resolve();
+					};
+					spritesheet.src = URL.createObjectURL( this.response );
+				};
+				requestTimeout = setTimeout( function() {
+					xhr.abort();
+					deferred.reject( 'http', { textStatus: 'timeout' } );
+				}, 30 * 1000 );
+				
+				xhr.onabort = xhr.onerror = function() {
+					if ( deferred.state() === 'pending' ) {
+						deferred.reject( 'http', { textStatus: 'error' } );
+					}
+				};
+				xhr.send();
+				
+				return deferred.promise( { abort: function() {
+					deferred.reject( 'http', { textStatus: 'abort' } );
+					xhr.abort();
+				} } );
+			} ).fail( handleError );
+		} );
+	}
+	
+	$.when( contentRequest, permissionsRequest ).then( function() {
 		// Make sure the editor wasn't destroyed while we were waiting
 		if ( $root.hasClass( 'spriteedit-loaded' ) ) {
 			enable();
@@ -351,7 +356,7 @@ var create = function( state ) {
 		contentRequest.abort && contentRequest.abort();
 		
 		handleError( code, error );
-		destroy();
+		destroy( true );
 	} );
 	
 	// Handle closing the editor on navigation
@@ -1315,29 +1320,36 @@ var create = function( state ) {
 					makeButton( i18n.ctxDownloadImage, {
 						icon: 'download',
 						action: function() {
+							var $button = $( this );
 							var data;
 							var $box = $parent.parent();
 							// Already an image, just pass on the object URL
 							if ( $box.hasClass( 'spriteedit-new' ) ) {
 								data = $parent.find( '> img' ).attr( 'src' );
 							} else {
-								// Individual sprite needs to be extracted from the spritesheet
-								var width = settings.imageWidth;
-								var height = settings.imageHeight;
-								var posPx = posToPx( $box.data( 'pos' ) );
-								var imgCanv = getCanvas( 'image' );
-								
-								imgCanv.clear();
-								imgCanv.ctx.drawImage( spritesheet,
-									posPx.left, posPx.top, width, height,
-									0, 0, width, height
-								);
-								
-								data = $.Deferred();
-								imgCanv.canvas.toBlob( data.resolve );
+								$button.addClass( 'spriteedit-processing' );
+								data = sheetRequest.then( function() {
+									// Individual sprite needs to be extracted from the spritesheet
+									var width = settings.imageWidth;
+									var height = settings.imageHeight;
+									var posPx = posToPx( $box.data( 'pos' ) );
+									var imgCanv = getCanvas( 'image' );
+									
+									imgCanv.clear();
+									imgCanv.ctx.drawImage( spritesheet,
+										posPx.left, posPx.top, width, height,
+										0, 0, width, height
+									);
+									
+									var d = $.Deferred();
+									imgCanv.canvas.toBlob( d.resolve );
+									
+									return d.promise();
+								} );
 							}
 							
 							$.when( data ).then( function( blob ) {
+								$button.removeClass( 'spriteedit-processing' );
 								var name = $box.data( 'sort-key' ) + '.png';
 								// IE10+: (has Blob, but not a[download])
 								if ( navigator.msSaveBlob ) {
@@ -1622,14 +1634,32 @@ var create = function( state ) {
 			},
 			/**
 			 * Returns the names Lua table
+			 * 
+			 * Updates the URL timestamp if URLs are being used and the sheet
+			 * has been modified. As such, this always generates a new table if
+			 * there isn't one already pending.
 			 */
 			getTable: function() {
+				if ( promises.table && promises.table.state() === 'resolved' ) {
+					promises.table = null;
+				}
 				var deferred = makeDeferred( 'table' );
 				if ( !deferred ) {
 					return promises.table;
 				}
 				
 				names.getObject().then( function( obj ) {
+					if ( spriteSettings[i18n.luaKeySettingsUrl] ) {
+						var url = $doc.data( 'original-url' ).split( '?' );
+						// Update the version parameter if the sheet was modified
+						if ( sheet.modified ) {
+							url[1] = 'version=' + Date.now();
+							$doc.data( 'url', url.join( '?' ) );
+						}
+						
+						obj[i18n.luaKeySettings][i18n.luaKeySettingsUrl] =
+							luaTable.func( $doc.data( 'urlfunc' ).replace( /\$1/, url[1] ) );
+					}
 					deferred.resolve( 'return ' + luaTable.create( obj ) );
 				} );
 				
@@ -1752,6 +1782,9 @@ var create = function( state ) {
 				if ( modified !== undefined ) {
 					sheet.modified = modified;
 				}
+				if ( spriteSettings[i18n.luaKeySettingsUrl] ) {
+					names.invalidate( true );
+				}
 			},
 			/**
 			 * Invalidates just the stash's promise
@@ -1769,44 +1802,46 @@ var create = function( state ) {
 					return promises.pos;
 				}
 				
-				var lastPos = spriteSettings[i18n.luaKeySettingsPos] || 1;
-				var usedPos = {};
-				usedPos[lastPos] = true;
-				
-				var newImgs = [];
-				$doc.find( '.spritedoc-box' ).each( function() {
-					var $box = $( this );
-					var pos = $box.data( 'pos' );
-					if ( pos === undefined ) {
-						newImgs.push( $box );
-					} else {
-						usedPos[pos] = true;
-						if ( pos > lastPos ) {
-							lastPos = pos;
-						}
-					}
-				} );
-				
-				if ( newImgs.length ) {
-					var unusedPos = [];
-					for ( var i = 1; i <= lastPos; i++ ) {
-						if ( !usedPos[i] ) {
-							unusedPos.push( i );
-						}
-					}
+				sheetRequest.then( function() {
+					var lastPos = spriteSettings[i18n.luaKeySettingsPos] || 1;
+					var usedPos = {};
+					usedPos[lastPos] = true;
 					
-					newImgs.forEach( function( $box ) {
-						$box.data( 'new-pos', unusedPos.length ? unusedPos.shift() : ++lastPos );
+					var newImgs = [];
+					$doc.find( '.spritedoc-box' ).each( function() {
+						var $box = $( this );
+						var pos = $box.data( 'pos' );
+						if ( pos === undefined ) {
+							newImgs.push( $box );
+						} else {
+							usedPos[pos] = true;
+							if ( pos > lastPos ) {
+								lastPos = pos;
+							}
+						}
 					} );
 					
-					if ( !unusedPos.length ) {
-						var imagesPerRow = ( settings.sheetWidth + settings.spacing ) / ( settings.imageWidth + settings.spacing );
-						settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * ( settings.imageHeight + settings.spacing ) - settings.spacing;
-						getCanvas( 'sheet' ).resize();
+					if ( newImgs.length ) {
+						var unusedPos = [];
+						for ( var i = 1; i <= lastPos; i++ ) {
+							if ( !usedPos[i] ) {
+								unusedPos.push( i );
+							}
+						}
+						
+						newImgs.forEach( function( $box ) {
+							$box.data( 'new-pos', unusedPos.length ? unusedPos.shift() : ++lastPos );
+						} );
+						
+						if ( !unusedPos.length ) {
+							var imagesPerRow = ( settings.sheetWidth + settings.spacing ) / ( settings.imageWidth + settings.spacing );
+							settings.sheetHeight = Math.ceil( lastPos / imagesPerRow ) * ( settings.imageHeight + settings.spacing ) - settings.spacing;
+							getCanvas( 'sheet' ).resize();
+						}
 					}
-				}
-				
-				deferred.resolve();
+					
+					deferred.resolve();
+				} );
 				
 				return promises.pos;
 			},
@@ -1964,10 +1999,19 @@ var create = function( state ) {
 			return names.save( summary, conflict );
 		} ).then( function( data ) {
 			if ( sheet.modified ) {
-				sheet.getData().then( function( blob ) {
-					overwriteSpritesheet( URL.createObjectURL( blob ) );
-				} );
+				if ( spriteSettings[i18n.luaKeySettingsUrl] ) {
+					var url = $doc.data( 'url' );
+					overwriteSpritesheet( url );
+					$doc.data( 'original-url', url );
+				} else {
+					sheet.getData().then( function( blob ) {
+						overwriteSpritesheet( URL.createObjectURL( blob ) );
+					} );
+				}
 			}
+			// Prevent disabling, otherwise we'd end up with the old
+			// spritesheet if the editor was restarted and closed
+			overwriteSpritesheet.style = null;
 			
 			// Null edit, nothing to do here
 			if ( !data || data.edit.nochange ) {
@@ -3308,6 +3352,10 @@ var create = function( state ) {
 		
 		$doc.add( $viewTab.find( 'a' ) ).off( '.spriteEdit' );
 		
+		if ( restore ) {
+			overwriteSpritesheet.disable();
+		}
+		
 		// No further cleanup necessary
 		if ( !enabled ) {
 			return;
@@ -3695,21 +3743,29 @@ var findChangeTag = function( tag, options ) {
  * Replaces the spritesheet with the provided URL
  * 
  * It's assumed the URL will be an object URL, which it handles revoking
- * if the spritesheet is replaced again.
+ * if the spritesheet is replaced again or disabled.
+ * 
+ * The current style element can be accessed from `overwriteSpritesheet.style`.
  */
-var overwriteSpritesheet = ( function() {
-	var inlineStyle;
-	return function( url ) {
-		if ( inlineStyle ) {
-			inlineStyle.disabled = true;
-			URL.revokeObjectURL( inlineStyle.url );
-		}
-		inlineStyle = mw.util.addCSS(
-			'#spritedoc .sprite { background-image: url(' + url + ') !important }'
-		);
-		inlineStyle.url = url;
-	};
-}() );
+var overwriteSpritesheet = function( url ) {
+	overwriteSpritesheet.disable();
+	overwriteSpritesheet.style = mw.util.addCSS(
+		'#spritedoc .sprite { background-image: url(' + url + ') !important }'
+	);
+	overwriteSpritesheet.style.url = url;
+};
+/**
+ * Disables the current style so its styles don't apply
+ * and revokes the object URL.
+ */
+overwriteSpritesheet.disable = function() {
+	var inlineStyle = overwriteSpritesheet.style;
+	if ( inlineStyle ) {
+		inlineStyle.disabled = true;
+		URL.revokeObjectURL( inlineStyle.url );
+	}
+};
+
 var luaTable = {};
 /** Recursively creates a pretty printed lua table from an object
  * 
