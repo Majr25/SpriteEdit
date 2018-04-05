@@ -66,7 +66,6 @@ var i18n = {
 var $root = $( document.documentElement );
 var $win = $( window );
 var $body = $( document.body );
-var $doc = $( '#spritedoc' );
 var URL = window.URL || window.webkitURL;
 var imageEditingSupported = !!( window.FileList &&
 	window.ArrayBuffer &&
@@ -78,7 +77,6 @@ var imageEditingSupported = !!( window.FileList &&
 // HTML pointer-events is dumb and can't be tested for
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
 var pointerEventsSupported = $.client.profile().name !== 'msie' || $.client.profile().versionBase > 10;
-var idsPageId = $doc.data( 'idspage' );
 var originalTitle = document.title;
 
 
@@ -116,6 +114,8 @@ $win.on( 'popstate', function() {
  * "state" is what triggered the creation (e.g. from history navigation)
  */
 var create = function( state ) {
+	var $doc = $( '#spritedoc' );
+	var idsPageId = $doc.data( 'idspage' );
 	var preventClose;
 	var settings = {};
 	var mouse = {
@@ -139,14 +139,14 @@ var create = function( state ) {
 		action: 'query',
 		prop: 'revisions',
 		rvprop: 'content',
-		utf8: true,
+		formatversion: 2,
 	} } );
 	var parseApi = new mw.Api( { parameters: {
 		action: 'parse',
 		prop: 'text',
-		disablepp: true,
 		disabletoc: true,
-		utf8: true,
+		disablelimitreport: true,
+		formatversion: 2,
 	} } );
 	var $headingTemplate = $( '<h3>' ).html(
 		$( '<span>' )
@@ -174,6 +174,8 @@ var create = function( state ) {
 		$( '#ca-view' ).add( '#ca-spriteedit' ).toggleClass( 'selected' );
 	}
 	
+	// Replace the spritesheet with a fresh uncached one to ensure
+	// we don't save over it with an old version.
 	var sheetRequest;
 	if ( imageEditingSupported ) {
 		var $sprite = $doc.find( '.sprite' ).first();
@@ -188,8 +190,6 @@ var create = function( state ) {
 		}
 		settings.sheet += ( settings.sheet.match( /\?/ ) ? '&' : '?' ) + 'version=' + Date.now();
 		
-		// Replace the spritesheet with a fresh uncached one to ensure
-		// we don't save over it with an old version.
 		// XHR is used instead of a CORS Image so a blob URL can
 		// be used for the background image, rather than the real URL.
 		// This works around the image being downloaded twice, probably
@@ -258,64 +258,65 @@ var create = function( state ) {
 		} );
 	}
 	
-	// Check if the IDs page has been edited since opening
-	// the page and download the latest version if so
-	var curContentRequest = retryableRequest( function() {
+	// Get some info about this wiki, the user's rights and
+	// block status, and the last edit timestamp for the ids page
+	var infoRequest = retryableRequest( function() {
 		return revisionsApi.get( {
 			rvprop: 'timestamp',
 			pageids: idsPageId,
+			meta: 'siteinfo|userinfo',
+			uiprop: 'rights|blockinfo',
 		} );
+	} ).done( function( data ) {
+		fixTimestamp.offset = data.query.general.timeoffset;
 	} );
-	var contentRequest = curContentRequest.then( function( data ) {
-		var currentTimestamp = fixTimestamp( data.query.pages[idsPageId].revisions[0].timestamp );
+	
+	// Check if the ids page has been edited since opening the
+	// documentation page, and re-download it if necessary
+	var contentRequest = infoRequest.then( function( data ) {
+		var currentTimestamp = fixTimestamp( data.query.pages[0].revisions[0].timestamp );
 		if ( currentTimestamp > $doc.data( 'idstimestamp' ) ) {
-			$doc.data( 'idstimestamp', currentTimestamp );
-			
-			curContentRequest = retryableRequest( function() {
+			var newContent = retryableRequest( function() {
 				return parseApi.get( {
 					title: mw.config.get( 'wgPageName' ),
 					text: $( '<i>' ).html(
 						$.parseHTML( $doc.attr( 'data-refreshtext' ) )
 					).html()
 				} );
-			} ).done( function( data ) {
-				oldHtml = data.parse.text['*'];
-				$doc.html( oldHtml );
+			} ).done( function( parseData ) {
+				oldHtml = parseData.parse.text;
+				$doc.replaceWith( oldHtml );
+				$doc = $( '#spritedoc' );
+				spriteSettings = JSON.parse( $doc.attr( 'data-settings' ) );
+				idsPageId = $doc.data( 'idspage' );
 			} );
 			
-			return curContentRequest;
+			return newContent;
 		} else {
-			oldHtml = $doc.html();
+			oldHtml = $doc[0].outerHTML;
 		}
-	} ).promise( { abort: curContentRequest.abort } );
-	
-	// Check if we have permission to edit the IDs page and
-	// spritesheet file and that the user isn't blocked
-	var curPermissionsRequest = retryableRequest( function() {
-		return new mw.Api().get( {
-			action: 'query',
-			meta: 'userinfo',
-			uiprop: 'rights|blockinfo',
-			utf8: true,
-		} );
 	} );
-	var permissionsRequest = curPermissionsRequest.then( function( data ) {
-		var info = data.query.userinfo;
+	
+	// Check if we have permission to edit the IDs page, spritesheet
+	// file, and use tags, and that the user isn't blocked
+	var permissionsRequest = $.when( infoRequest, contentRequest ).then( function( data ) {
+		var info = data[0].query.userinfo;
 		
 		var canEdit = true;
 		if ( info.blockid ) {
 			canEdit = false;
 			var $blockNotice = $( '<p>' ).text( i18n.blockedNotice );
+			var blockText;
 			if ( info.blockreason ) {
-				curPermissionsRequest = retryableRequest( function() {
+				blockText = retryableRequest( function() {
 					return parseApi.get( { summary: info.blockreason } );
-				} ).done( function( data ) {
+				} ).done( function( parseData ) {
 					$blockNotice.append( '<br>', i18n.blockedReason.replace( /\$1/g,
-						$( '<span>' ).addClass( 'comment' ).html( data.parse.parsedsummary['*'] ).html()
+						$( '<span>' ).addClass( 'comment' ).html( parseData.parse.parsedsummary ).html()
 					) );
 				} );
 			}
-			$.when( curPermissionsRequest ).always( function() {
+			$.when( blockText ).always( function() {
 				mw.notify( $blockNotice, { type: 'error', autoHide: false } );
 			} );
 		} else {
@@ -343,14 +344,12 @@ var create = function( state ) {
 		}
 		
 		if ( !canEdit ) {
-			if ( sheetRequest ) {
-				sheetRequest.abort();
-			}
-			contentRequest.abort();
+			sheetRequest && sheetRequest.abort();
+			contentRequest.abort && contentRequest.abort();
 			
 			destroy();
 		}
-	} ).promise( { abort: curPermissionsRequest.abort } );
+	} );
 	
 	$.when( sheetRequest, contentRequest, permissionsRequest ).then( function() {
 		// Make sure the editor wasn't destroyed while we were waiting
@@ -359,11 +358,9 @@ var create = function( state ) {
 		}
 	}, function( code, error ) {
 		// Fatal error, bail
-		if ( sheetRequest ) {
-			sheetRequest.abort();
-		}
-		contentRequest.abort();
-		permissionsRequest.abort();
+		sheetRequest && sheetRequest.abort();
+		infoRequest.abort();
+		contentRequest.abort && contentRequest.abort();
 		
 		handleError( code, error );
 		destroy();
@@ -1473,12 +1470,11 @@ var create = function( state ) {
 			return i18n.genericError;
 		}
 		
-		var pages = data.query.pages;
-		var page = pages[idsPageId];
+		var page = data.query.pages[0];
 		if ( !page ) {
 			return i18n.diffErrorMissingPage;
 		}
-		var diff = page.revisions[0].diff['*'];
+		var diff = page.revisions[0].diff.body;
 		if ( diff === undefined ) {
 			return i18n.diffError;
 		}
@@ -1665,7 +1661,7 @@ var create = function( state ) {
 							rvprop: '',
 							rvdifftotext: table,
 							rvlimit: 1,
-							utf8: true,
+							formatversion: 2,
 						} );
 					} );
 				} ).then( function( data ) {
@@ -1706,7 +1702,7 @@ var create = function( state ) {
 							basetimestamp: !conflict ? $doc.data( 'idstimestamp' ) : undefined,
 							summary: summary,
 							tags: canTag ? 'spriteeditor' : undefined,
-							utf8: true,
+							formatversion: 2,
 						} );
 					} );
 				} ).then( deferred.resolve, function( code, data ) {
@@ -1879,6 +1875,7 @@ var create = function( state ) {
 							ignorewarnings: true,
 							filename: $doc.data( 'spritesheet' ),
 							file: blob,
+							formatversion: 2,
 						} );
 					} );
 				} ).then( function( data ) {
@@ -1915,6 +1912,7 @@ var create = function( state ) {
 							filename: $doc.data( 'spritesheet' ),
 							filekey: key,
 							tags: canTag ? 'spriteeditor' : undefined,
+							formatversion: 2,
 						} );
 					} );
 				} ).then( deferred.resolve, function( code, data ) {
@@ -1967,7 +1965,7 @@ var create = function( state ) {
 				return names.save( summary, conflict );
 			} ).then( function( data ) {
 				// Null edit, nothing to do here
-				if ( data.edit.nochange === '' ) {
+				if ( data.edit.nochange ) {
 					return;
 				}
 				
@@ -2004,7 +2002,7 @@ var create = function( state ) {
 			
 			$.when( newContent ).done( function( data ) {
 				if ( refresh ) {
-					$doc.html( data.parse.text['*'] );
+					$doc.replaceWith( data.parse.text );
 				}
 			} ).always( function() {
 				destroy();
@@ -2114,7 +2112,7 @@ var create = function( state ) {
 			var curEditbox = new OO.ui.TextInputWidget( {
 				id: 'spriteedit-ec-curText',
 				multiline: true,
-				value: curTextData[0].query.pages[idsPageId].revisions[0]['*'],
+				value: curTextData[0].query.pages[0].revisions[0].content,
 			} );
 			curEditbox.$element.data( 'ooui-object', curEditbox );
 			var oldEditbox = new OO.ui.TextInputWidget( {
@@ -3252,6 +3250,37 @@ var create = function( state ) {
 	};
 	
 	/**
+	 * Picks the section which is probably the section the user wants to put things
+	 *
+	 * Mainly based on the section closest to the top of the screen,
+	 * but prefers elements which are not at all going off the screen
+	 * (accounting for the space taken up by the toolbar).
+	 *
+	 * Returns the section element
+	 */
+	var nearestSection = function() {
+		var offscreen, prox, elem;
+		$doc.find( '.spritedoc-section' ).each( function() {
+			var curPos = this.getBoundingClientRect().top - 35;
+			var curProx = Math.abs( curPos );
+			if ( prox && curProx > prox ) {
+				// Prefer on-screen section, even if it is further from the top
+				if ( offscreen ) {
+					elem = this;
+				}
+				
+				return false;
+			}
+			
+			offscreen = curPos < 0;
+			prox = curProx;
+			elem = this;
+		} );
+		
+		return elem;
+	};
+	
+	/**
 	 * Destroys the editor
 	 *
 	 * Removes any controls, and unbinds all events in the spriteEdit namespace, and releases
@@ -3266,7 +3295,7 @@ var create = function( state ) {
 		document.title = originalTitle;
 		
 		// Disable close confirm dialog
-		preventClose.release();
+		preventClose && preventClose.release();
 		
 		$win.add( document ).off( '.spriteEdit' );
 		
@@ -3307,7 +3336,7 @@ var create = function( state ) {
 				} );
 			}
 			
-			$doc.html( oldHtml );
+			$doc.replaceWith( oldHtml );
 			return;
 		}
 		
@@ -3455,45 +3484,21 @@ var scrollIntoView = function( $elem, instant ) {
 };
 
 /**
- * Picks the section which is probably the section the user wants to put things
- *
- * Mainly based on the section closest to the top of the screen,
- * but prefers elements which are not at all going off the screen
- * (accounting for the space taken up by the toolbar).
- *
- * Returns the section element
- */
-var nearestSection = function() {
-	var offscreen, prox, elem;
-	$doc.find( '.spritedoc-section' ).each( function() {
-		var curPos = this.getBoundingClientRect().top - 35;
-		var curProx = Math.abs( curPos );
-		if ( prox && curProx > prox ) {
-			// Prefer on-screen section, even if it is further from the top
-			if ( offscreen ) {
-				elem = this;
-			}
-			
-			return false;
-		}
-		
-		offscreen = curPos < 0;
-		prox = curProx;
-		elem = this;
-	} );
-	
-	return elem;
-};
-
-/**
- * Converts the extended ISO timestamp returned by the API
- * into the basic version used by the rest of MediaWiki
+ * Converts the extended ISO UTC timestamp returned by the API
+ * into the MediaWiki format in the wiki's timezone
  *
  * YYYY-MM-DDTHH:MM:SSZ -> YYYYMMDDHHMMSS
  */
 var fixTimestamp = function( timestamp ) {
-	return timestamp.replace( /[\-T:Z]/g, '' );
+	// Make UTC date
+	var date = new Date( timestamp );
+	// Convert to wiki's timezone
+	date.setTime( date.getTime() + fixTimestamp.offset * 60 * 1000 );
+	// Return MW timestamp format
+	return date.toISOString().replace( /[\-T:]|\.\d+Z/g, '' );
 };
+// This will be set when the editor is created and a siteinfo request is made
+fixTimestamp.offset = 0;
 
 /**
  * Quote a string for lua table
