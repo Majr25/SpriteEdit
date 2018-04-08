@@ -31,6 +31,7 @@ var i18n = {
 	luaKeySettings: 'settings',
 	luaKeySettingsHeight: 'height',
 	luaKeySettingsPos: 'pos',
+	luaKeySettingsSize: 'size',
 	luaKeySettingsSpacing: 'spacing',
 	luaKeySettingsUrl: 'url',
 	luaKeySettingsWidth: 'width',
@@ -281,9 +282,9 @@ var create = function( state ) {
 	if ( imageEditingSupported ) {
 		sheetRequest = contentRequest.then( function() {
 			var $sprite = $doc.find( '.sprite' ).first();
-			settings.imageWidth = spriteSettings[i18n.luaKeySettingsWidth];
-			settings.imageHeight = spriteSettings[i18n.luaKeySettingsHeight];
-			settings.spacing = spriteSettings[i18n.luaKeySettingsSpacing];
+			settings.imageWidth = spriteSettings[i18n.luaKeySettingsWidth] || spriteSettings[i18n.luaKeySettingsSize] || 16;
+			settings.imageHeight = spriteSettings[i18n.luaKeySettingsHeight] || settings.imageWidth || 16;
+			settings.spacing = spriteSettings[i18n.luaKeySettingsSpacing] || 0;
 			settings.sheet = $doc.data( 'original-url' );
 			if ( !settings.sheet ) {
 				// Get a capture of the whole URL, and of the URL minus the query string
