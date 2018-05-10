@@ -1249,22 +1249,12 @@ var create = function( state ) {
 			}
 		} );
 		// Make pastes plain text
-		$doc.on( 'paste.spriteEdit', '[contenteditable]', function() {
-			var $this = $( this );
-			var hasFocus = $this.has( ':focus' );
-			if ( !hasFocus ) {
-				$this.focus();
-			}
-			setTimeout( function() {
-				var text = $this.text().replace( /\n/g, ' ' );
-				if ( $this.html() !== $( '<i>' ).text( text ).html() ) {
-					$this.text( text );
-					
-					if ( !hasFocus ) {
-						$this.blur();
-					}
-				}
-			}, 0 );
+		$doc.on( 'paste.spriteEdit', '[contenteditable]', function( e ) {
+			var text = ( e.originalEvent.clipboardData || window.clipboardData ).getData( 'Text' );
+			text = text.replace( /\n/g, ' ' ).trim();
+			window.document.execCommand( 'insertText', false, text );
+			
+			e.preventDefault();
 		} );
 		var isText = function( e ) {
 			var types = e.originalEvent.dataTransfer.types;
