@@ -1653,7 +1653,8 @@ var create = function( state ) {
 					if ( spriteSettings[i18n.luaKeySettingsUrl] ) {
 						var url = $doc.data( 'original-url' ).split( '?' );
 						// Update the version parameter if the sheet was modified
-						if ( sheet.modified ) {
+						// or if there's no version parameter
+						if ( sheet.modified || !url[1] ) {
 							url[1] = 'version=' + Date.now();
 							$doc.data( 'url', url.join( '?' ) );
 						}
