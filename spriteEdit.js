@@ -947,8 +947,10 @@ var create = function( state ) {
 			var $button = $( this );
 			$button.focus().blur();
 			
-			// Prevent saving and notify if there are duplicate names
-			if ( $doc.find( '.spriteedit-dupe' ).length ) {
+			// Prevent saving and notify if there are duplicate names, but only
+			// if there's more than one. If there's only one, it's clearly been
+			// incorrectly marked as a duplicate
+			if ( $doc.find( '.spriteedit-dupe' ).length > 1 ) {
 				mw.notify( i18n.dupeNamesNotice, { type: 'warn', autoHide: false } );
 				
 				return;
@@ -1150,6 +1152,14 @@ var create = function( state ) {
 			var trimmedText = text.trim().replace( /  +/g, ' ' );
 			var origText = $this.attr( 'data-original-text' );
 			$this.removeAttr( 'data-original-text' ).off( 'keypress.spriteEdit' );
+			
+			// Can't make a change if we don't know what the original text was
+			// This can happen when Edge calls the blur event on elements that
+			// that aren't focused, which it does when moving the highlight
+			// when using the find in browser feature
+			if ( origText === undefined ) {
+				return;
+			}
 			
 			if ( text !== trimmedText ) {
 				text = trimmedText;
