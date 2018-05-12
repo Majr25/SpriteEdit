@@ -1,4 +1,5 @@
-( function() {
+// jshint jquery:true, esversion:5
+/* globals require, module, mediaWiki, mw, OO */
 'use strict';
 
 /** "Global" vars (preserved between editing sessions) **/
@@ -74,13 +75,12 @@ var i18n = {
 var $root = $( document.documentElement );
 var $win = $( window );
 var $body = $( document.body );
-var URL = window.URL || window.webkitURL;
 var imageEditingSupported = !!( window.FileList &&
 	window.ArrayBuffer &&
 	window.Blob &&
 	window.FormData &&
 	window.ProgressEvent &&
-	URL && URL.revokeObjectURL && URL.createObjectURL &&
+	window.URL && URL.revokeObjectURL && URL.createObjectURL &&
 	document.createElement( 'canvas' ).getContext );
 // HTML pointer-events is dumb and can't be tested for
 // Just check that we're not IE < 11, old Opera has too little usage to bother checking for
@@ -1054,7 +1054,9 @@ var create = function( state ) {
 					$( '<div>' ).addClass( 'spriteedit-id-changes' ),
 				],
 				onClose: function() {
-					URL.revokeObjectURL( sheetUrl );
+					if ( imageEditingSupported ) {
+						URL.revokeObjectURL( sheetUrl );
+					}
 				},
 			} );
 			var $changesText = changesPanel.$text;
@@ -3624,7 +3626,7 @@ var supports = function( prop, val ) {
 		return CSS.supports( prop, val );
 	}
 	if ( window.supportsCSS ) {
-		return supportsCSS( prop, val );
+		return window.supportsCSS( prop, val );
 	}
 	
 	var camelProp = prop.replace( /-([a-z]|[0-9])/ig, function( _, chr ) {
@@ -3866,7 +3868,7 @@ luaTable.createValue = function( val, indent ) {
 			// return it directly, otherwise invalid type
 			if ( val.luaFunc ) {
 				return val();
-			}
+			} // jshint ignore:line
 		default:
 			throw new TypeError( 'Lua table: Invalid value type: ' + typeof val );
 	}
@@ -3918,6 +3920,3 @@ if ( !HTMLCanvasElement.prototype.toBlob ) {
 
 // Finally start the editor
 create( 'initial' );
-
-
-}() );
