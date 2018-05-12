@@ -204,9 +204,7 @@ var create = function( state ) {
 			var newContent = retryableRequest( function() {
 				return parseApi.get( {
 					title: mw.config.get( 'wgPageName' ),
-					text: $( '<i>' ).html(
-						$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-					).html()
+					text: $doc.attr( 'data-refreshtext' ),
 				} );
 			} ).done( function( parseData ) {
 				oldHtml = parseData.parse.text;
@@ -2037,9 +2035,7 @@ var create = function( state ) {
 				newContent = retryableRequest( function() {
 					return parseApi.get( {
 						title: mw.config.get( 'wgPageName' ),
-						text: $( '<i>' ).html(
-							$.parseHTML( $doc.attr( 'data-refreshtext' ) )
-						).html(),
+						text: $doc.attr( 'data-refreshtext' ),
 					} );
 				} );
 			}
