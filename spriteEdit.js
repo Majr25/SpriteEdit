@@ -22,6 +22,7 @@ var i18n = {
 	errorGeneric: 'Error',
 	errorHttp: 'HTTP error',
 	genericError: 'Something went wrong',
+	luaKeyData: 'data',
 	luaKeyDeprecated: 'deprecated',
 	luaKeyId: 'id',
 	luaKeyIds: 'ids',
@@ -1588,6 +1589,7 @@ var create = function( state ) {
 							if ( pos === undefined ) {
 								pos = $box.data( 'new-pos' );
 							}
+							var data = $box.attr( 'data-data' );
 							$box.find( '.spritedoc-name' ).find( 'code' ).each( function() {
 								var $this = $( this );
 								var id = $this.text().replace( /\s+/g, ' ' );
@@ -1596,6 +1598,7 @@ var create = function( state ) {
 									id: id,
 									pos: pos,
 									section: sectionId,
+									data: data && JSON.parse( data ),
 									deprecated: $this.hasClass( 'spritedoc-deprecated' ),
 								} );
 							} );
@@ -1610,6 +1613,7 @@ var create = function( state ) {
 						var idData = {};
 						idData[i18n.luaKeyPos] = this.pos;
 						idData[i18n.luaKeySection] = this.section;
+						idData[i18n.luaKeyData] = this.data;
 						if ( this.deprecated ) {
 							idData[i18n.luaKeyDeprecated] = this.deprecated;
 						}
@@ -3782,7 +3786,7 @@ luaTable.create = function( obj, indent ) {
 	var size = isArray ? obj.length : Object.keys( obj ).length;
 	var containsObject;
 	$.each( obj, function( k, v ) {
-		if ( typeof v === 'object' ) {
+		if ( v !== null && typeof v === 'object' ) {
 			containsObject = true;
 			return false;
 		}
